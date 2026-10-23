@@ -46,22 +46,29 @@ if (selectedIndex3 === 0) {
 const codeEditor = document.getElementById("code-editor");
 const lineNumbers = document.getElementById("line-numbers");
 const highlightLayer = document.getElementById("highlight-layer");
+const editorWrap = document.getElementById("editor-wrap");
 const runButton = document.getElementById("run-button");
 const resetCodeButton = document.getElementById("reset-code-button");
-const errorBox = document.getElementById("error-box");
+const consoleOutput = document.getElementById("console-output");
+const consolePanel = document.getElementById("console-panel");
+const consoleResize = document.getElementById("console-resize");
+const clearConsoleButton = document.getElementById("clear-console-button");
 const furiganaToggle = document.getElementById("furigana-toggle");
 const furiganaToggleLabel = document.getElementById("furigana-toggle-label");
-const guideTabs = document.querySelectorAll(".guide-tab");
-const guidePanels = document.querySelectorAll(".guide-panel");
-const rubyCodeView = document.getElementById("ruby-code-view");
 const tokenDetail = document.getElementById("token-detail");
-const readingList = document.getElementById("reading-list");
 const stepButtons = document.getElementById("step-buttons");
 const stepTitle = document.getElementById("step-title");
 const stepDescription = document.getElementById("step-description");
 const stepProgress = document.getElementById("step-progress");
 const hintButton = document.getElementById("hint-button");
 const hintList = document.getElementById("hint-list");
+const activityEditor = document.getElementById("activity-editor");
+const activityGuide = document.getElementById("activity-guide");
+const guideSidebar = document.getElementById("guide-sidebar");
+const guideCloseButton = document.getElementById("guide-close-button");
+const statusParse = document.getElementById("status-parse");
+const statusToken = document.getElementById("status-token");
+const statusCursor = document.getElementById("status-cursor");
 
 const quizScreen = document.getElementById("quiz-screen");
 const resultScreen = document.getElementById("result-screen");
@@ -87,8 +94,9 @@ let lastValidQuizData = null;
 let lastValidSourceCode = null;
 let latestParsedSupportData = null;
 let initialQuizSnapshot = null;
-let currentGuideTab = "furigana";
 let currentStep = 1;
+let consoleResizeState = null;
+let guideIsOpen = false;
 const revealedHintCounts = {
   1: 0,
   2: 0,
@@ -101,11 +109,11 @@ const STEP_GUIDE = [
   {
     number: 1,
     title: "STEP 1：コードを読む",
-    description: "まずは初期コードを解析して、部品の意味と読み下しを確認しましょう。",
+    description: "まずは初期コードを解析して、部品の意味を確認しましょう。",
     hints: [
       "`const` は、名前を付けて文字を入れておく合図です。",
       "`if` の中では、選んだ番号と正解番号を比べています。",
-      "ふりがなタブと読み下しタブを行き来して、同じ部品を探してみましょう。"
+      "ふりがなをONにして、同じ部品の意味を探してみましょう。"
     ]
   },
   {
@@ -160,10 +168,19 @@ function setEditorCode(code) {
 }
 
 function updateEditorView() {
+  applyFuriganaMode();
   updateLineNumbers();
-  highlightLayer.innerHTML = highlightCode(codeEditor.value);
+  renderEditorHighlight(codeEditor.value);
   syncEditorScroll();
   updateLearningSupport();
+  updateCursorStatus();
+}
+
+function applyFuriganaMode() {
+  const enabled = furiganaToggle.checked;
+  editorWrap.classList.toggle("furigana-on", enabled);
+  editorWrap.classList.toggle("furigana-off", enabled === false);
+  furiganaToggleLabel.textContent = enabled ? "ふりがな ON" : "ふりがな OFF";
 }
 
 function updateLineNumbers() {
@@ -260,24 +277,28 @@ function escapeHtml(text) {
 }
 
 function showSuccess(message) {
-  errorBox.className = "message-box success";
-  errorBox.textContent = message;
+  appendConsole("success", message);
+  statusParse.textContent = "準備完了";
 }
 
 function showErrors(errors) {
-  errorBox.className = "message-box error";
-
-  if (errors.length === 1) {
-    errorBox.textContent = errors[0];
-    return;
-  }
-
-  let html = "<ul>";
   for (let i = 0; i < errors.length; i++) {
-    html = html + "<li>" + escapeHtml(errors[i]) + "</li>";
+    appendConsole("error", errors[i]);
   }
-  html = html + "</ul>";
-  errorBox.innerHTML = html;
+  statusParse.textContent = "エラーあり";
+}
+
+function appendConsole(kind, message) {
+  const line = document.createElement("div");
+  line.className = "console-line console-" + kind;
+  const prefix = kind === "error" ? "[エラー]" : kind === "success" ? "[実行]" : "[学習]";
+  line.textContent = prefix + " " + message;
+  consoleOutput.appendChild(line);
+  consoleOutput.scrollTop = consoleOutput.scrollHeight;
+}
+
+function clearConsole() {
+  clearChildren(consoleOutput);
 }
 
 // ==================================================
@@ -751,13 +772,6 @@ function isDigit(char) {
 function updateLearningSupport() {
   let parsed = null;
   let parseError = null;
-  let tokenErrorResult = null;
-
-  try {
-    tokenize(codeEditor.value);
-  } catch (error) {
-    tokenErrorResult = error;
-  }
 
   try {
     parsed = parseLearnerCode(codeEditor.value);
@@ -769,39 +783,18 @@ function updateLearningSupport() {
     latestParsedSupportData = null;
   }
 
-  renderFuriganaTokens(codeEditor.value, tokenErrorResult || parseError);
-  renderReadingSupport(parsed, parseError);
   renderStepGuide(parsed, parseError);
 }
 
-function renderFuriganaTokens(source, guideError) {
-  clearChildren(rubyCodeView);
-  rubyCodeView.classList.toggle("furigana-off", furiganaToggle.checked === false);
-  furiganaToggleLabel.textContent = furiganaToggle.checked ? "ふりがな ON" : "ふりがな OFF";
-
-  if (guideError !== null) {
-    const message = document.createElement("p");
-    message.className = "empty-guide-message";
-    message.textContent = "コードの部品を確認できません。使えない文字や閉じていない文字列を直してください。";
-    rubyCodeView.appendChild(message);
-    tokenDetail.textContent = guideError.messages ? guideError.messages[0] : "コードを確認してください。";
-    return;
-  }
-
-  if (source.length === 0) {
-    const emptyMessage = document.createElement("p");
-    emptyMessage.className = "empty-guide-message";
-    emptyMessage.textContent = "コードを書くと、ここに部品ごとの意味が表示されます。";
-    rubyCodeView.appendChild(emptyMessage);
-    tokenDetail.textContent = "気になる部品を選ぶと、ここに詳しい意味が表示されます。";
-    return;
-  }
+function renderEditorHighlight(source) {
+  clearChildren(highlightLayer);
 
   const lines = source.split("\n");
   const tokensByLine = groupTokensByLine(tokenizeForFurigana(source));
+
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
     const lineRow = document.createElement("div");
-    lineRow.className = "ruby-line";
+    lineRow.className = "hl-line";
     const lineTokens = tokensByLine[lineIndex + 1] || [];
     let column = 1;
 
@@ -811,7 +804,7 @@ function renderFuriganaTokens(source, guideError) {
         lineRow.appendChild(document.createTextNode(lines[lineIndex].slice(column - 1, token.column - 1)));
       }
 
-      lineRow.appendChild(createRubyTokenButton(token));
+      lineRow.appendChild(createRubyTokenSpan(token));
       column = token.column + token.value.length;
     }
 
@@ -823,34 +816,30 @@ function renderFuriganaTokens(source, guideError) {
       lineRow.appendChild(document.createTextNode(" "));
     }
 
-    rubyCodeView.appendChild(lineRow);
+    highlightLayer.appendChild(lineRow);
   }
 }
 
-function createRubyTokenButton(token) {
+function createRubyTokenSpan(token) {
     const meaning = describeToken(token);
-    const tokenButton = document.createElement("button");
-    tokenButton.type = "button";
-    tokenButton.className = "ruby-token ruby-token-" + getTokenClassName(token);
-    tokenButton.setAttribute("aria-label", token.value + "：" + meaning.short);
-    tokenButton.title = meaning.detail;
+    const tokenSpan = document.createElement("span");
+    tokenSpan.className = "ruby-token ruby-token-" + getTokenClassName(token);
+    tokenSpan.title = meaning.detail;
 
-    const meaningText = document.createElement("span");
-    meaningText.className = "ruby-meaning";
-    meaningText.textContent = meaning.short;
-    meaningText.title = meaning.detail;
+    if (token.type !== "punctuation") {
+      const meaningText = document.createElement("span");
+      meaningText.className = "ruby-meaning";
+      meaningText.textContent = meaning.short;
+      meaningText.title = meaning.detail;
+      tokenSpan.appendChild(meaningText);
+    }
 
     const codeText = document.createElement("span");
     codeText.className = "ruby-code";
     codeText.textContent = getTokenDisplayValue(token);
 
-    tokenButton.appendChild(meaningText);
-    tokenButton.appendChild(codeText);
-    tokenButton.addEventListener("click", function () {
-      tokenDetail.textContent = meaning.detail;
-    });
-
-    return tokenButton;
+    tokenSpan.appendChild(codeText);
+    return tokenSpan;
 }
 
 function groupTokensByLine(tokens) {
@@ -973,32 +962,6 @@ function tokenizeForFurigana(source) {
   }
 }
 
-function renderReadingSupport(parsed, parseError) {
-  clearChildren(readingList);
-
-  if (parsed === null) {
-    const item = document.createElement("li");
-    item.textContent = "この行の読み方は確認できません。エラーを直してから確認してください。";
-    readingList.appendChild(item);
-
-    if (parseError !== null && parseError.messages) {
-      for (let i = 0; i < parseError.messages.length; i++) {
-        const errorItem = document.createElement("li");
-        errorItem.className = "reading-error";
-        errorItem.textContent = parseError.messages[i];
-        readingList.appendChild(errorItem);
-      }
-    }
-    return;
-  }
-
-  for (let j = 0; j < parsed.readingLines.length; j++) {
-    const readingItem = document.createElement("li");
-    readingItem.textContent = parsed.readingLines[j].text;
-    readingList.appendChild(readingItem);
-  }
-}
-
 function renderStepGuide(parsed, parseError) {
   renderStepButtons(parsed, parseError);
 
@@ -1069,7 +1032,7 @@ function evaluateStepProgress(parsedData, stepNumber, parseError) {
   if (stepNumber === 1) {
     return {
       done: true,
-      message: "構文解析：成功。ふりがなと読み下しを確認できます。"
+      message: "構文解析：成功。ふりがなと学習ガイドで部品の意味を確認できます。"
     };
   }
 
@@ -1152,8 +1115,8 @@ function describeToken(token) {
   if (token.type === "keyword") {
     if (token.value === "const") {
       return {
-        short: "定義",
-        detail: "`const` は、名前を付けて値を用意するためのキーワードです。"
+        short: "定数",
+        detail: "`const` は、名前を付けて値を用意するためのキーワードです。ここでは定数として扱います。"
       };
     }
     if (token.value === "if") {
@@ -1163,7 +1126,7 @@ function describeToken(token) {
       };
     }
     return {
-      short: "それ以外",
+      short: "そうでなければ",
       detail: "`else` は、`if` の条件が合わなかったときの処理を書くためのキーワードです。"
     };
   }
@@ -1503,7 +1466,7 @@ function applyCodeToPreview() {
     lastValidQuizData = cloneQuizData(parsed.questions);
     lastValidSourceCode = codeEditor.value;
     restartQuiz();
-    showSuccess("コードを確認しました。右側のクイズに反映しました。");
+    showSuccess("コードを確認しました。右側のクイズプレビューに反映しました。学習者のJavaScriptは実行していません。");
     updateLearningSupport();
   } catch (error) {
     if (error.messages) {
@@ -1603,19 +1566,95 @@ function initializeLearningState() {
   lastValidSourceCode = INITIAL_CODE;
 }
 
-function switchGuideTab(tabName) {
-  currentGuideTab = tabName;
+function setGuideOpen(open) {
+  guideIsOpen = open === true;
+  guideSidebar.classList.toggle("hidden", guideIsOpen === false);
+  activityGuide.classList.toggle("active", guideIsOpen);
+  activityEditor.classList.toggle("active", guideIsOpen === false);
+  activityGuide.setAttribute("aria-pressed", guideIsOpen ? "true" : "false");
+  activityEditor.setAttribute("aria-pressed", guideIsOpen ? "false" : "true");
+  activityGuide.setAttribute("aria-label", guideIsOpen ? "学習ガイドを閉じる" : "学習ガイドを開く");
+}
 
-  for (let i = 0; i < guideTabs.length; i++) {
-    const isActive = guideTabs[i].dataset.guideTab === tabName;
-    guideTabs[i].classList.toggle("active", isActive);
-    guideTabs[i].setAttribute("aria-selected", isActive ? "true" : "false");
+function getCursorLineAndColumn(source, cursorIndex) {
+  const before = source.slice(0, cursorIndex);
+  const lines = before.split("\n");
+  return {
+    line: lines.length,
+    column: lines[lines.length - 1].length + 1
+  };
+}
+
+function positionToIndex(source, line, column) {
+  const lines = source.split("\n");
+  let index = 0;
+  for (let i = 0; i < line - 1; i++) {
+    index = index + (lines[i] ? lines[i].length : 0) + 1;
+  }
+  return index + column - 1;
+}
+
+function findTokenAtCursor(source, cursorIndex) {
+  const tokens = tokenizeForFurigana(source);
+  let matched = null;
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    const start = positionToIndex(source, token.line, token.column);
+    const end = start + token.value.length;
+    if (cursorIndex >= start && cursorIndex <= end) {
+      matched = token;
+      break;
+    }
+    if (start > cursorIndex) {
+      break;
+    }
   }
 
-  for (let j = 0; j < guidePanels.length; j++) {
-    const shouldShow = guidePanels[j].id === tabName + "-panel";
-    guidePanels[j].classList.toggle("hidden", shouldShow === false);
+  return matched;
+}
+
+function updateCursorStatus() {
+  const source = codeEditor.value;
+  const cursor = getCursorLineAndColumn(source, codeEditor.selectionStart);
+  statusCursor.textContent = "Ln " + cursor.line + ", Col " + cursor.column;
+
+  const token = findTokenAtCursor(source, codeEditor.selectionStart);
+  if (token === null) {
+    statusToken.textContent = "コードの意味";
+    tokenDetail.textContent = "気になる部品にカーソルを置くと、ここに詳しい意味が表示されます。";
+    return;
   }
+
+  const meaning = describeToken(token);
+  statusToken.textContent = token.value + " = " + meaning.short;
+  tokenDetail.textContent = meaning.detail;
+}
+
+function startConsoleResize(event) {
+  consoleResizeState = {
+    startY: event.clientY,
+    startHeight: consolePanel.getBoundingClientRect().height
+  };
+  document.addEventListener("mousemove", resizeConsole);
+  document.addEventListener("mouseup", stopConsoleResize);
+  event.preventDefault();
+}
+
+function resizeConsole(event) {
+  if (consoleResizeState === null) {
+    return;
+  }
+
+  const nextHeight = consoleResizeState.startHeight + (consoleResizeState.startY - event.clientY);
+  const maxHeight = Math.floor(window.innerHeight * 0.45);
+  consolePanel.style.height = Math.max(72, Math.min(maxHeight, nextHeight)) + "px";
+}
+
+function stopConsoleResize() {
+  consoleResizeState = null;
+  document.removeEventListener("mousemove", resizeConsole);
+  document.removeEventListener("mouseup", stopConsoleResize);
 }
 
 // ==================================================
@@ -1624,9 +1663,26 @@ function switchGuideTab(tabName) {
 
 codeEditor.addEventListener("input", updateEditorView);
 codeEditor.addEventListener("scroll", syncEditorScroll);
+codeEditor.addEventListener("keyup", updateCursorStatus);
+codeEditor.addEventListener("click", updateCursorStatus);
+codeEditor.addEventListener("select", updateCursorStatus);
 runButton.addEventListener("click", applyCodeToPreview);
 resetCodeButton.addEventListener("click", resetCode);
-furiganaToggle.addEventListener("change", updateLearningSupport);
+furiganaToggle.addEventListener("change", updateEditorView);
+clearConsoleButton.addEventListener("click", clearConsole);
+consoleResize.addEventListener("mousedown", startConsoleResize);
+activityGuide.addEventListener("click", function (event) {
+  event.stopPropagation();
+  setGuideOpen(guideIsOpen === false);
+});
+activityEditor.addEventListener("click", function (event) {
+  event.stopPropagation();
+  setGuideOpen(false);
+});
+guideCloseButton.addEventListener("click", function (event) {
+  event.stopPropagation();
+  setGuideOpen(false);
+});
 hintButton.addEventListener("click", function () {
   const step = STEP_GUIDE[currentStep - 1];
   if (revealedHintCounts[currentStep] < step.hints.length) {
@@ -1634,12 +1690,6 @@ hintButton.addEventListener("click", function () {
   }
   renderHints();
 });
-
-for (let i = 0; i < guideTabs.length; i++) {
-  guideTabs[i].addEventListener("click", function () {
-    switchGuideTab(guideTabs[i].dataset.guideTab);
-  });
-}
 
 choiceButtons[0].addEventListener("click", function () {
   checkAnswer(0);
@@ -1657,5 +1707,7 @@ nextButton.addEventListener("click", goToNextQuestion);
 restartButton.addEventListener("click", restartQuiz);
 
 initializeLearningState();
+setGuideOpen(false);
+appendConsole("info", "初期コードを読み込みました。変更できるのは問題文・選択肢と正解番号だけです。");
 setEditorCode(INITIAL_CODE);
 applyCodeToPreview();
