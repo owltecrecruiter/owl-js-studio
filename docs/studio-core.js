@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.1
+ * OWL JS Studio v0.9.2
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -22,7 +22,8 @@
 
   var COMPANY_NAME = "アウルテクノロジー";
   var COMPANY_URL = "https://owl-tec.co.jp/";
-  var MAKER_CREDIT_PREFIX = "制作ツール提供：";
+  var MAKER_CREDIT_POWERED = "Powered by";
+  var MAKER_CREDIT_BRAND = "OWL Technology";
 
   var NAMED_COLORS = Object.freeze({
     white: "#ffffff",
@@ -113,10 +114,10 @@
     {
       number: 3,
       title: "STEP 3：背景色と文字色を変える",
-      description: "やること：背景色と文字色を、赤・緑・青の3つの数（RGB）で変えます。変える場所：`backgroundColor` と `textColor` の `rgb(赤, 緑, 青)`。手順：1) 0〜255の整数を書く、または色ピッカーを使う 2) 実行する 3) タイトル画面と問題画面の両方を見る。確認：両方に同じ色が付いていればOK。ピッカーはコード編集の補助です。読みにくい色なら警告が出ます。",
+      description: "やること：背景色と文字色を、赤・緑・青の3つの数（RGB）で変えます。変える場所：`backgroundColor` と `textColor` の `rgb(赤, 緑, 青)`。手順：1) 0〜255の整数をコードに書く、またはアプリ内の色パレットで色とRGB数値を選ぶ 2) 実行する 3) タイトル画面と問題画面の両方を見る。確認：両方に同じ色が付いていればOK。パレットはコード編集の補助です。プレビューの色は実行後に変わります。読みにくい色なら警告が出ます。",
       hints: [
         "`rgb(234, 243, 255)` は、赤234・緑243・青255 の光の混ぜ方です。どれも 0（光なし）〜255（最大）の整数だけ使えます。",
-        "右側の色ピッカーは、同じ `rgb(...)` をコードに書き込む補助です。HTMLやCSS、`#eaf3ff` のような16進数はここでは使いません。",
+        "右側の色パレットは、同じ `rgb(...)` をコードに書き込む補助です。パレット上のRGB数値も直接編集できます。学習コードでは HTMLやCSS、`#eaf3ff` のような16進数は使いません。",
         "実行後は「はじめる」で問題画面へ進み、色がタイトルと同じかも確認しましょう。"
       ]
     },
@@ -133,11 +134,11 @@
     {
       number: 5,
       title: "STEP 5：選択肢と正解を変える",
-      description: "やること：各問3つの選択肢と、正解番号を変えます。変える場所：`choice1_1` などと `selectedIndex1 === 0` の右側の番号。手順：1) 選択肢を書く 2) 正解番号を書く 3) 実行してプレイする。確認：正解と不正解の両方で if/else が動くこと。番号は 0が1番目、1が2番目、2が3番目です。",
+      description: "やること：選択肢の文字と、正解番号を変えます。変える場所：`choice1_1` などと `selectedIndex1 === 0` の右側の番号。番号は 0始まりです（0=1番目、1=2番目、2=3番目）。手順：1) 選択肢を変える 2) 正解番号を別の 0/1/2 に変える 3) 実行する 4) クイズで新しい正解を選ぶ 5) 「正解！」と出ればこのSTEPはクリアです。",
       hints: [
-        "1番目の選択肢が正解なら `=== 0`、2番目なら `=== 1`、3番目なら `=== 2` です。",
-        "`selectedIndex1` や `if` / `else` の形は変えず、右側の番号と選択肢の文字だけを変えます。",
-        "完成したら3問プレイし、結果画面からタイトルへ戻れるかも確認しましょう。"
+        "正解番号は 0が1番目、1が2番目、2が3番目です。1始まり（1,2,3）では書けません。",
+        "`selectedIndex1` や `if` / `else` の形は変えず、右側の番号と選択肢の文字だけを変えます。STEPボタンを押すと、変える行へジャンプします。",
+        "実行したあと、新しい正解を押して「正解！」が出るまで、このSTEPはクリアになりません。"
       ]
     }
   ];
@@ -785,9 +786,10 @@
   }
 
   function createMakerCreditHtml() {
-    return "<p class=\"maker-credit\">" + MAKER_CREDIT_PREFIX +
+    return "<p class=\"maker-credit\">" +
+      "<span class=\"maker-credit-powered\">" + escapeHtmlText(MAKER_CREDIT_POWERED) + "</span>" +
       "<a href=\"" + COMPANY_URL + "\" target=\"_blank\" rel=\"noopener noreferrer\">" +
-      COMPANY_NAME + "</a></p>";
+      escapeHtmlText(MAKER_CREDIT_BRAND) + "</a></p>";
   }
 
   function normalizeColor(value, label) {
@@ -944,7 +946,37 @@
     }
   }
 
-  function evaluateStepProgress(parsedData, stepNumber, parseError, initialWork) {
+  function getStep5ChangeSummary(work, initialWork) {
+    var changedChoices = 0;
+    var changedAnswers = 0;
+    var i;
+    var j;
+    if (!work || !initialWork || !work.questions || !initialWork.questions) {
+      return {
+        changedChoices: 0,
+        changedAnswers: 0
+      };
+    }
+    for (i = 0; i < WORK_LIMITS.questionCount; i++) {
+      if (!work.questions[i] || !initialWork.questions[i]) {
+        continue;
+      }
+      if (work.questions[i].correctIndex !== initialWork.questions[i].correctIndex) {
+        changedAnswers = changedAnswers + 1;
+      }
+      for (j = 0; j < WORK_LIMITS.choiceCount; j++) {
+        if (work.questions[i].choices[j] !== initialWork.questions[i].choices[j]) {
+          changedChoices = changedChoices + 1;
+        }
+      }
+    }
+    return {
+      changedChoices: changedChoices,
+      changedAnswers: changedAnswers
+    };
+  }
+
+  function evaluateStepProgress(parsedData, stepNumber, parseError, initialWork, evidence) {
     if (parsedData === null || parseError !== null) {
       return {
         done: false,
@@ -1004,25 +1036,46 @@
       };
     }
 
-    var changedChoices = 0;
-    var changedAnswers = 0;
-    for (i = 0; i < WORK_LIMITS.questionCount; i++) {
-      if (work.questions[i].correctIndex !== initialWork.questions[i].correctIndex) {
-        changedAnswers = changedAnswers + 1;
-      }
-      for (var j = 0; j < WORK_LIMITS.choiceCount; j++) {
-        if (work.questions[i].choices[j] !== initialWork.questions[i].choices[j]) {
-          changedChoices = changedChoices + 1;
-        }
-      }
+    if (stepNumber !== 5) {
+      return {
+        done: false,
+        message: "このSTEPの達成条件はありません。"
+      };
     }
 
-    var done = changedChoices > 0 && changedAnswers > 0;
+    var extra = evidence || {};
+    var editorMatchesLastRun = extra.editorMatchesLastRun === true;
+    var lastRunWork = extra.lastRunWork || null;
+    var confirmedNewCorrect = extra.confirmedNewCorrect === true;
+    var parsedChanges = getStep5ChangeSummary(work, initialWork);
+    var runChanges = lastRunWork ? getStep5ChangeSummary(lastRunWork, initialWork) : { changedChoices: 0, changedAnswers: 0 };
+    var parsedReady = parsedChanges.changedChoices > 0 && parsedChanges.changedAnswers > 0;
+    var runReady = runChanges.changedChoices > 0 && runChanges.changedAnswers > 0;
+
+    if (parsedReady !== true) {
+      return {
+        done: false,
+        message: "未達成：選択肢（変更 " + parsedChanges.changedChoices + "）と正解番号（変更 " + parsedChanges.changedAnswers + "問）を変えましょう。番号は0が1番目・1が2番目・2が3番目です。"
+      };
+    }
+
+    if (runReady !== true || editorMatchesLastRun !== true) {
+      return {
+        done: false,
+        message: "未達成：選択肢と正解番号の変更を実行し、クイズで新しい正解（0=1番目、1=2番目、2=3番目）を選んで判定を確認しましょう。"
+      };
+    }
+
+    if (confirmedNewCorrect !== true) {
+      return {
+        done: false,
+        message: "未達成：実行済みです。クイズで新しい正解を選び、「正解！」と出るか確認しましょう。"
+      };
+    }
+
     return {
-      done: done,
-      message: done
-        ? "達成：選択肢と正解番号が変更されています。3問プレイして if/else の判定を確認しましょう。"
-        : "未達成：選択肢（変更 " + changedChoices + "）と正解番号（変更 " + changedAnswers + "問）を変え、0が1番目・1が2番目・2が3番目であることも確認しましょう。"
+      done: true,
+      message: "達成：選択肢と正解番号を変え、新しい正解で判定を確認しました。"
     };
   }
 
@@ -1148,8 +1201,10 @@
       "    .result-message { margin: 0 0 18px; font-size: 16px; line-height: 1.6; }\n" +
       "    .result-actions { display: grid; gap: 8px; }\n" +
       "    .work-reference { margin: 16px 0 0; font-size: 12px; word-break: break-all; opacity: 0.8; }\n" +
-      "    .maker-credit { margin: 14px 0 0; font-size: 12px; font-weight: 400; line-height: 1.5; opacity: 0.78; }\n" +
-      "    .maker-credit a { color: inherit; text-decoration: underline; }\n" +
+      "    .maker-credit { margin: 16px 0 0; font-size: 12px; font-weight: 400; line-height: 1.45; opacity: 0.78; }\n" +
+      "    .maker-credit-powered { display: block; font-size: 10px; letter-spacing: 0.08em; opacity: 0.82; }\n" +
+      "    .maker-credit a { color: inherit; text-decoration: none; font-weight: 600; }\n" +
+      "    .maker-credit a:hover { text-decoration: underline; }\n" +
       "    .hidden { display: none; }\n" +
       "  </style>\n" +
       "</head>\n" +
@@ -1318,7 +1373,8 @@
     NAMED_COLORS: NAMED_COLORS,
     COMPANY_NAME: COMPANY_NAME,
     COMPANY_URL: COMPANY_URL,
-    MAKER_CREDIT_PREFIX: MAKER_CREDIT_PREFIX,
+    MAKER_CREDIT_POWERED: MAKER_CREDIT_POWERED,
+    MAKER_CREDIT_BRAND: MAKER_CREDIT_BRAND,
     INITIAL_CODE: INITIAL_CODE,
     STEP_GUIDE: STEP_GUIDE,
     STEP_FOCUS_NAMES: STEP_FOCUS_NAMES,
@@ -1343,6 +1399,7 @@
     cloneWorkData: cloneWorkData,
     cloneQuestions: cloneQuestions,
     validateWorkData: validateWorkData,
+    getStep5ChangeSummary: getStep5ChangeSummary,
     evaluateStepProgress: evaluateStepProgress,
     getStepFocusLines: getStepFocusLines,
     describeIdentifier: describeIdentifier,

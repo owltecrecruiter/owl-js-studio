@@ -72,8 +72,25 @@ const scoreText = document.getElementById("score-text");
 const resultMessage = document.getElementById("result-message");
 const retryButton = document.getElementById("retry-button");
 const backToTitleButton = document.getElementById("back-to-title-button");
-const backgroundColorPicker = document.getElementById("background-color-picker");
-const textColorPicker = document.getElementById("text-color-picker");
+const backgroundColorOpener = document.getElementById("background-color-opener");
+const textColorOpener = document.getElementById("text-color-opener");
+const backgroundColorSwatch = document.getElementById("background-color-swatch");
+const textColorSwatch = document.getElementById("text-color-swatch");
+const colorPickerPopover = document.getElementById("color-picker-popover");
+const cpSv = document.getElementById("cp-sv");
+const cpSvThumb = document.getElementById("cp-sv-thumb");
+const cpCurrentSwatch = document.getElementById("cp-current-swatch");
+const cpHue = document.getElementById("cp-hue");
+const cpHueThumb = document.getElementById("cp-hue-thumb");
+const cpBarR = document.getElementById("cp-bar-r");
+const cpBarG = document.getElementById("cp-bar-g");
+const cpBarB = document.getElementById("cp-bar-b");
+const cpThumbR = document.getElementById("cp-thumb-r");
+const cpThumbG = document.getElementById("cp-thumb-g");
+const cpThumbB = document.getElementById("cp-thumb-b");
+const cpNumR = document.getElementById("cp-num-r");
+const cpNumG = document.getElementById("cp-num-g");
+const cpNumB = document.getElementById("cp-num-b");
 
 const choiceButtons = [
   document.getElementById("choice-0"),
@@ -94,6 +111,13 @@ let currentStep = 1;
 let consoleResizeState = null;
 let guideIsOpen = false;
 let applyingColorPicker = false;
+let lastRunSourceCode = null;
+let lastRunWork = null;
+let confirmedNewCorrect = false;
+let colorPickerTarget = null;
+let colorPickerHsv = { h: 0, s: 0, v: 1 };
+let colorPickerRgb = { r: 255, g: 255, b: 255 };
+let colorPickerDrag = null;
 const revealedHintCounts = {
   1: 0,
   2: 0,
@@ -460,11 +484,19 @@ function tokenizeForFurigana(source) {
   }
 }
 
+function getStepEvidence() {
+  return {
+    lastRunWork: lastRunWork,
+    editorMatchesLastRun: lastRunSourceCode !== null && lastRunSourceCode === codeEditor.value,
+    confirmedNewCorrect: confirmedNewCorrect === true
+  };
+}
+
 function renderStepGuide(parsed, parseError) {
   renderStepButtons(parsed, parseError);
 
   const step = STEP_GUIDE[currentStep - 1];
-  const result = evaluateStepProgress(parsed, currentStep, parseError, initialQuizSnapshot);
+  const result = evaluateStepProgress(parsed, currentStep, parseError, initialQuizSnapshot, getStepEvidence());
   stepTitle.textContent = step.title;
   stepDescription.textContent = step.description;
   stepProgress.textContent = result.message;
@@ -478,7 +510,7 @@ function renderStepButtons(parsed, parseError) {
 
   for (let i = 0; i < STEP_GUIDE.length; i++) {
     const step = STEP_GUIDE[i];
-    const result = evaluateStepProgress(parsed, step.number, parseError, initialQuizSnapshot);
+    const result = evaluateStepProgress(parsed, step.number, parseError, initialQuizSnapshot, getStepEvidence());
     const button = document.createElement("button");
     button.type = "button";
     button.className = "step-button";
@@ -493,6 +525,7 @@ function renderStepButtons(parsed, parseError) {
       currentStep = step.number;
       renderStepGuide(latestParsedSupportData, latestParsedSupportData === null ? parseError : null);
       renderEditorHighlight(codeEditor.value);
+      jumpEditorToStepFocus(latestParsedSupportData);
       syncEditorOverlay();
     });
     stepButtons.appendChild(button);
@@ -647,10 +680,16 @@ function getVerifiedStandaloneQuizData() {
 function applyCodeToPreview() {
   try {
     const parsed = parseLearnerCode(codeEditor.value);
+    const sourceChanged = lastRunSourceCode !== codeEditor.value;
     currentWork = cloneWorkData(parsed.work);
     quizData = currentWork.questions;
     lastValidQuizData = cloneWorkData(parsed.work);
     lastValidSourceCode = codeEditor.value;
+    lastRunWork = cloneWorkData(parsed.work);
+    lastRunSourceCode = codeEditor.value;
+    if (sourceChanged) {
+      confirmedNewCorrect = false;
+    }
     applyWorkTheme(currentWork);
     showTitleScreen();
     showSuccess("コードを確認しました。右側のタイトル画面に反映しました。学習者のJavaScriptは実行していません。");
@@ -677,13 +716,91 @@ function mapIndexThroughReplacement(index, replacement) {
   return index + (replacement.newEnd - replacement.oldEnd);
 }
 
-function applyPickerToCode(constName, hexValue) {
-  const rgb = hexToRgb(hexValue);
-  if (!rgb || Number.isNaN(rgb.r) || Number.isNaN(rgb.g) || Number.isNaN(rgb.b)) {
+function isRgbByte(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 255;
+}
+
+function clamp01(value) {
+  if (value < 0) {
+    return 0;
+  }
+  if (value > 1) {
+    return 1;
+  }
+  return value;
+}
+
+function rgbToHsv(r, g, b) {
+  const red = r / 255;
+  const green = g / 255;
+  const blue = b / 255;
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  const delta = max - min;
+  let h = 0;
+  const s = max === 0 ? 0 : delta / max;
+  const v = max;
+  if (delta !== 0) {
+    if (max === red) {
+      h = ((green - blue) / delta + (green < blue ? 6 : 0)) * 60;
+    } else if (max === green) {
+      h = ((blue - red) / delta + 2) * 60;
+    } else {
+      h = ((red - green) / delta + 4) * 60;
+    }
+  }
+  return { h: h, s: s, v: v };
+}
+
+function hsvToRgb(h, s, v) {
+  const hue = ((h % 360) + 360) % 360;
+  const c = v * s;
+  const x = c * (1 - Math.abs((hue / 60) % 2 - 1));
+  const m = v - c;
+  let r1 = 0;
+  let g1 = 0;
+  let b1 = 0;
+  if (hue < 60) {
+    r1 = c; g1 = x; b1 = 0;
+  } else if (hue < 120) {
+    r1 = x; g1 = c; b1 = 0;
+  } else if (hue < 180) {
+    r1 = 0; g1 = c; b1 = x;
+  } else if (hue < 240) {
+    r1 = 0; g1 = x; b1 = c;
+  } else if (hue < 300) {
+    r1 = x; g1 = 0; b1 = c;
+  } else {
+    r1 = c; g1 = 0; b1 = x;
+  }
+  return {
+    r: Math.round((r1 + m) * 255),
+    g: Math.round((g1 + m) * 255),
+    b: Math.round((b1 + m) * 255)
+  };
+}
+
+function parseRgbChannelInput(text) {
+  if (typeof text !== "string") {
+    return null;
+  }
+  const trimmed = text.trim();
+  if (!/^(0|[1-9]\d{0,2})$/.test(trimmed)) {
+    return null;
+  }
+  const value = Number(trimmed);
+  if (!isRgbByte(value)) {
+    return null;
+  }
+  return value;
+}
+
+function applyPickerRgbToCode(constName, r, g, b) {
+  if (!isRgbByte(r) || !isRgbByte(g) || !isRgbByte(b)) {
     return;
   }
 
-  const literal = formatRgbLiteral(rgb.r, rgb.g, rgb.b);
+  const literal = formatRgbLiteral(r, g, b);
   const replacement = replaceConstStringLiteral(codeEditor.value, constName, literal);
   if (replacement === null) {
     return;
@@ -701,16 +818,31 @@ function applyPickerToCode(constName, hexValue) {
   applyingColorPicker = false;
 }
 
+function applyPickerToCode(constName, hexValue) {
+  const rgb = hexToRgb(hexValue);
+  if (!rgb || Number.isNaN(rgb.r) || Number.isNaN(rgb.g) || Number.isNaN(rgb.b)) {
+    return;
+  }
+  applyPickerRgbToCode(constName, rgb.r, rgb.g, rgb.b);
+}
+
 function syncColorPickersFromCode() {
+  syncOneColorSwatch("backgroundColor", backgroundColorSwatch);
+  syncOneColorSwatch("textColor", textColorSwatch);
   if (applyingColorPicker) {
     return;
   }
-  syncOneColorPicker("backgroundColor", backgroundColorPicker);
-  syncOneColorPicker("textColor", textColorPicker);
+  if (colorPickerTarget) {
+    const literal = readConstStringLiteral(codeEditor.value, colorPickerTarget);
+    const rgb = literal ? parseRgbLiteral(literal) : null;
+    if (rgb) {
+      setColorPickerRgb(rgb.r, rgb.g, rgb.b, false);
+    }
+  }
 }
 
-function syncOneColorPicker(constName, picker) {
-  if (!picker) {
+function syncOneColorSwatch(constName, swatch) {
+  if (!swatch) {
     return;
   }
   const literal = readConstStringLiteral(codeEditor.value, constName);
@@ -718,10 +850,175 @@ function syncOneColorPicker(constName, picker) {
   if (rgb === null) {
     return;
   }
-  const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
-  if (picker.value.toLowerCase() !== hex) {
-    picker.value = hex;
+  swatch.style.backgroundColor = formatRgbLiteral(rgb.r, rgb.g, rgb.b);
+}
+
+function setColorPickerRgb(r, g, b, writeToCode) {
+  colorPickerRgb = { r: r, g: g, b: b };
+  colorPickerHsv = rgbToHsv(r, g, b);
+  renderColorPickerChrome();
+  if (writeToCode && colorPickerTarget) {
+    applyPickerRgbToCode(colorPickerTarget, r, g, b);
   }
+}
+
+function setColorPickerHsv(h, s, v, writeToCode) {
+  colorPickerHsv = { h: h, s: s, v: v };
+  colorPickerRgb = hsvToRgb(h, s, v);
+  renderColorPickerChrome();
+  if (writeToCode && colorPickerTarget) {
+    applyPickerRgbToCode(colorPickerTarget, colorPickerRgb.r, colorPickerRgb.g, colorPickerRgb.b);
+  }
+}
+
+function renderColorPickerChrome() {
+  const rgb = colorPickerRgb;
+  const hsv = colorPickerHsv;
+  const hueColor = hsvToRgb(hsv.h, 1, 1);
+  cpSv.style.background =
+    "linear-gradient(to bottom, rgba(0, 0, 0, 0), #000000), linear-gradient(to right, #ffffff, " +
+    formatRgbLiteral(hueColor.r, hueColor.g, hueColor.b) + ")";
+  cpSvThumb.style.left = (hsv.s * 100) + "%";
+  cpSvThumb.style.top = ((1 - hsv.v) * 100) + "%";
+  cpHueThumb.style.left = ((hsv.h / 360) * 100) + "%";
+  cpCurrentSwatch.style.backgroundColor = formatRgbLiteral(rgb.r, rgb.g, rgb.b);
+  cpBarR.style.background = "linear-gradient(to right, " + formatRgbLiteral(0, rgb.g, rgb.b) + ", " + formatRgbLiteral(255, rgb.g, rgb.b) + ")";
+  cpBarG.style.background = "linear-gradient(to right, " + formatRgbLiteral(rgb.r, 0, rgb.b) + ", " + formatRgbLiteral(rgb.r, 255, rgb.b) + ")";
+  cpBarB.style.background = "linear-gradient(to right, " + formatRgbLiteral(rgb.r, rgb.g, 0) + ", " + formatRgbLiteral(rgb.r, rgb.g, 255) + ")";
+  cpThumbR.style.left = ((rgb.r / 255) * 100) + "%";
+  cpThumbG.style.left = ((rgb.g / 255) * 100) + "%";
+  cpThumbB.style.left = ((rgb.b / 255) * 100) + "%";
+  if (document.activeElement !== cpNumR) {
+    cpNumR.value = String(rgb.r);
+  }
+  if (document.activeElement !== cpNumG) {
+    cpNumG.value = String(rgb.g);
+  }
+  if (document.activeElement !== cpNumB) {
+    cpNumB.value = String(rgb.b);
+  }
+}
+
+function isColorPickerOpen() {
+  return colorPickerPopover.classList.contains("hidden") === false;
+}
+
+function closeColorPicker() {
+  colorPickerPopover.classList.add("hidden");
+  colorPickerPopover.hidden = true;
+  colorPickerTarget = null;
+  colorPickerDrag = null;
+  backgroundColorOpener.setAttribute("aria-expanded", "false");
+  textColorOpener.setAttribute("aria-expanded", "false");
+}
+
+function positionColorPicker(anchor) {
+  const rect = anchor.getBoundingClientRect();
+  const editorColumn = document.querySelector(".editor-column");
+  const editorRight = editorColumn ? editorColumn.getBoundingClientRect().right : 0;
+  colorPickerPopover.classList.remove("hidden");
+  colorPickerPopover.hidden = false;
+  const popWidth = colorPickerPopover.offsetWidth || 232;
+  const popHeight = colorPickerPopover.offsetHeight || 280;
+  let left = rect.left;
+  let top = rect.bottom + 6;
+  if (left < editorRight + 8) {
+    left = Math.max(editorRight + 8, rect.right - popWidth);
+  }
+  if (left + popWidth > window.innerWidth - 8) {
+    left = Math.max(8, window.innerWidth - popWidth - 8);
+  }
+  if (top + popHeight > window.innerHeight - 8) {
+    top = Math.max(8, rect.top - popHeight - 6);
+  }
+  colorPickerPopover.style.left = Math.round(left) + "px";
+  colorPickerPopover.style.top = Math.round(top) + "px";
+}
+
+function openColorPicker(targetName, opener) {
+  const literal = readConstStringLiteral(codeEditor.value, targetName);
+  const rgb = literal ? parseRgbLiteral(literal) : (targetName === "textColor" ? { r: 31, g: 41, b: 55 } : { r: 234, g: 243, b: 255 });
+  colorPickerTarget = targetName;
+  setColorPickerRgb(rgb.r, rgb.g, rgb.b, false);
+  backgroundColorOpener.setAttribute("aria-expanded", targetName === "backgroundColor" ? "true" : "false");
+  textColorOpener.setAttribute("aria-expanded", targetName === "textColor" ? "true" : "false");
+  positionColorPicker(opener);
+}
+
+function toggleColorPicker(targetName, opener) {
+  if (isColorPickerOpen() && colorPickerTarget === targetName) {
+    closeColorPicker();
+    return;
+  }
+  openColorPicker(targetName, opener);
+}
+
+function ratioFromPointer(event, element) {
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0) {
+    return 0;
+  }
+  return clamp01((event.clientX - rect.left) / rect.width);
+}
+
+function applyColorPickerDrag(event) {
+  if (!colorPickerDrag) {
+    return;
+  }
+  if (colorPickerDrag === "sv") {
+    const rect = cpSv.getBoundingClientRect();
+    const s = rect.width <= 0 ? 0 : clamp01((event.clientX - rect.left) / rect.width);
+    const v = rect.height <= 0 ? 1 : 1 - clamp01((event.clientY - rect.top) / rect.height);
+    setColorPickerHsv(colorPickerHsv.h, s, v, true);
+    return;
+  }
+  if (colorPickerDrag === "hue") {
+    setColorPickerHsv(ratioFromPointer(event, cpHue) * 360, colorPickerHsv.s, colorPickerHsv.v, true);
+    return;
+  }
+  const next = {
+    r: colorPickerRgb.r,
+    g: colorPickerRgb.g,
+    b: colorPickerRgb.b
+  };
+  next[colorPickerDrag] = Math.round(ratioFromPointer(event, colorPickerDrag === "r" ? cpBarR : colorPickerDrag === "g" ? cpBarG : cpBarB) * 255);
+  setColorPickerRgb(next.r, next.g, next.b, true);
+}
+
+function startColorPickerDrag(kind, event) {
+  colorPickerDrag = kind;
+  applyColorPickerDrag(event);
+  event.preventDefault();
+}
+
+function handleRgbNumberInput(channel, field) {
+  const parsed = parseRgbChannelInput(field.value);
+  if (parsed === null) {
+    return;
+  }
+  const next = {
+    r: colorPickerRgb.r,
+    g: colorPickerRgb.g,
+    b: colorPickerRgb.b
+  };
+  next[channel] = parsed;
+  setColorPickerRgb(next.r, next.g, next.b, true);
+}
+
+function handleRgbNumberBlur(channel, field) {
+  const parsed = parseRgbChannelInput(field.value);
+  if (parsed !== null) {
+    handleRgbNumberInput(channel, field);
+    return;
+  }
+  const numeric = Number(String(field.value).trim());
+  if (Number.isFinite(numeric)) {
+    const clamped = Math.max(0, Math.min(255, Math.round(numeric)));
+    field.value = String(clamped);
+    handleRgbNumberInput(channel, field);
+    return;
+  }
+  field.value = String(colorPickerRgb[channel]);
 }
 
 function applyWorkTheme(work) {
@@ -786,6 +1083,15 @@ function checkAnswer(selectedIndex) {
     correctCount = correctCount + 1;
     answerMessage.textContent = "正解！";
     answerMessage.classList.add("correct");
+    if (
+      initialQuizSnapshot &&
+      lastRunWork &&
+      lastRunSourceCode === codeEditor.value &&
+      lastRunWork.questions[currentQuestionIndex].correctIndex !== initialQuizSnapshot.questions[currentQuestionIndex].correctIndex
+    ) {
+      confirmedNewCorrect = true;
+      updateLearningSupport();
+    }
   } else {
     answerMessage.textContent = "不正解";
     answerMessage.classList.add("incorrect");
@@ -867,6 +1173,23 @@ function positionToIndex(source, line, column) {
     index = index + (lines[i] ? lines[i].length : 0) + 1;
   }
   return index + column - 1;
+}
+
+function jumpEditorToStepFocus(parsed) {
+  if (!parsed || editorWrap.classList.contains("is-composing")) {
+    return;
+  }
+  const focusLines = getStepFocusLines(parsed, currentStep);
+  if (focusLines.length === 0) {
+    return;
+  }
+  const source = codeEditor.value;
+  const targetLine = focusLines[0];
+  const index = Math.max(0, Math.min(source.length, positionToIndex(source, targetLine, 1)));
+  const lineHeight = parseFloat(window.getComputedStyle(codeEditor).lineHeight) || 21;
+  codeEditor.scrollTop = Math.max(0, (targetLine - 1) * lineHeight);
+  codeEditor.setSelectionRange(index, index);
+  updateCursorStatus();
 }
 
 function findTokenAtCursor(source, cursorIndex) {
@@ -960,11 +1283,71 @@ if (typeof ResizeObserver === "function") {
 }
 runButton.addEventListener("click", applyCodeToPreview);
 resetCodeButton.addEventListener("click", resetCode);
-backgroundColorPicker.addEventListener("input", function () {
-  applyPickerToCode("backgroundColor", backgroundColorPicker.value);
+backgroundColorOpener.addEventListener("click", function (event) {
+  event.stopPropagation();
+  toggleColorPicker("backgroundColor", backgroundColorOpener);
 });
-textColorPicker.addEventListener("input", function () {
-  applyPickerToCode("textColor", textColorPicker.value);
+textColorOpener.addEventListener("click", function (event) {
+  event.stopPropagation();
+  toggleColorPicker("textColor", textColorOpener);
+});
+colorPickerPopover.addEventListener("mousedown", function (event) {
+  event.stopPropagation();
+});
+cpSv.addEventListener("mousedown", function (event) {
+  startColorPickerDrag("sv", event);
+});
+cpHue.addEventListener("mousedown", function (event) {
+  startColorPickerDrag("hue", event);
+});
+cpBarR.addEventListener("mousedown", function (event) {
+  startColorPickerDrag("r", event);
+});
+cpBarG.addEventListener("mousedown", function (event) {
+  startColorPickerDrag("g", event);
+});
+cpBarB.addEventListener("mousedown", function (event) {
+  startColorPickerDrag("b", event);
+});
+document.addEventListener("mousemove", function (event) {
+  if (colorPickerDrag) {
+    applyColorPickerDrag(event);
+  }
+});
+document.addEventListener("mouseup", function () {
+  colorPickerDrag = null;
+});
+document.addEventListener("mousedown", function (event) {
+  if (!isColorPickerOpen()) {
+    return;
+  }
+  if (colorPickerPopover.contains(event.target) || backgroundColorOpener.contains(event.target) || textColorOpener.contains(event.target)) {
+    return;
+  }
+  closeColorPicker();
+});
+document.addEventListener("keydown", function (event) {
+  if (event.key === "Escape" && isColorPickerOpen()) {
+    closeColorPicker();
+  }
+});
+cpNumR.addEventListener("input", function () {
+  handleRgbNumberInput("r", cpNumR);
+});
+cpNumG.addEventListener("input", function () {
+  handleRgbNumberInput("g", cpNumG);
+});
+cpNumB.addEventListener("input", function () {
+  handleRgbNumberInput("b", cpNumB);
+});
+cpNumR.addEventListener("blur", function () {
+  handleRgbNumberBlur("r", cpNumR);
+});
+cpNumG.addEventListener("blur", function () {
+  handleRgbNumberBlur("g", cpNumG);
+});
+cpNumB.addEventListener("blur", function () {
+  handleRgbNumberBlur("b", cpNumB);
 });
 furiganaToggle.addEventListener("change", updateEditorView);
 clearConsoleButton.addEventListener("click", clearConsole);
@@ -1016,4 +1399,27 @@ window.generateStandaloneQuizHtmlForCurrentEditor = generateStandaloneQuizHtmlFo
 window.updateEditorView = updateEditorView;
 window.updateCursorStatus = updateCursorStatus;
 window.applyPickerToCode = applyPickerToCode;
+window.applyPickerRgbToCode = applyPickerRgbToCode;
 window.syncColorPickersFromCode = syncColorPickersFromCode;
+window.openColorPicker = openColorPicker;
+window.closeColorPicker = closeColorPicker;
+window.getStepEvidence = getStepEvidence;
+window.getColorPickerState = function () {
+  return {
+    open: isColorPickerOpen(),
+    target: colorPickerTarget,
+    r: colorPickerRgb.r,
+    g: colorPickerRgb.g,
+    b: colorPickerRgb.b
+  };
+};
+window.getCurrentStepProgress = function (stepNumber) {
+  let parsed = null;
+  let parseError = null;
+  try {
+    parsed = parseLearnerCode(codeEditor.value);
+  } catch (error) {
+    parseError = error;
+  }
+  return evaluateStepProgress(parsed, stepNumber || currentStep, parseError, initialQuizSnapshot, getStepEvidence());
+};
