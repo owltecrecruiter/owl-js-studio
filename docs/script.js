@@ -45,6 +45,7 @@ if (selectedIndex3 === 0) {
 
 const codeEditor = document.getElementById("code-editor");
 const lineNumbers = document.getElementById("line-numbers");
+const furiganaGutter = document.getElementById("furigana-gutter");
 const highlightLayer = document.getElementById("highlight-layer");
 const editorWrap = document.getElementById("editor-wrap");
 const runButton = document.getElementById("run-button");
@@ -171,13 +172,13 @@ function updateEditorView() {
   applyFuriganaMode();
   updateLineNumbers();
   renderEditorHighlight(codeEditor.value);
-  syncEditorScroll();
+  syncEditorOverlay();
   updateLearningSupport();
   updateCursorStatus();
 }
 
 function applyFuriganaMode() {
-  const enabled = furiganaToggle.checked;
+  const enabled = furiganaToggle.checked === true;
   editorWrap.classList.toggle("furigana-on", enabled);
   editorWrap.classList.toggle("furigana-off", enabled === false);
   furiganaToggleLabel.textContent = enabled ? "ふりがな ON" : "ふりがな OFF";
@@ -194,10 +195,21 @@ function updateLineNumbers() {
   lineNumbers.innerHTML = html;
 }
 
-function syncEditorScroll() {
+function syncEditorOverlay() {
+  const barX = codeEditor.offsetWidth - codeEditor.clientWidth;
+  const barY = codeEditor.offsetHeight - codeEditor.clientHeight;
+  highlightLayer.style.right = barX + "px";
+  highlightLayer.style.bottom = barY + "px";
+  lineNumbers.style.marginBottom = barY + "px";
+  furiganaGutter.style.marginBottom = barY + "px";
   highlightLayer.scrollTop = codeEditor.scrollTop;
   highlightLayer.scrollLeft = codeEditor.scrollLeft;
   lineNumbers.scrollTop = codeEditor.scrollTop;
+  furiganaGutter.scrollTop = codeEditor.scrollTop;
+}
+
+function syncEditorScroll() {
+  syncEditorOverlay();
 }
 
 function highlightCode(code) {
@@ -788,6 +800,7 @@ function updateLearningSupport() {
 
 function renderEditorHighlight(source) {
   clearChildren(highlightLayer);
+  clearChildren(furiganaGutter);
 
   const lines = source.split("\n");
   const tokensByLine = groupTokensByLine(tokenizeForFurigana(source));
@@ -797,6 +810,7 @@ function renderEditorHighlight(source) {
     lineRow.className = "hl-line";
     const lineTokens = tokensByLine[lineIndex + 1] || [];
     let column = 1;
+    const meanings = [];
 
     for (let i = 0; i < lineTokens.length; i++) {
       const token = lineTokens[i];
@@ -804,7 +818,11 @@ function renderEditorHighlight(source) {
         lineRow.appendChild(document.createTextNode(lines[lineIndex].slice(column - 1, token.column - 1)));
       }
 
-      lineRow.appendChild(createRubyTokenSpan(token));
+      const meaning = describeToken(token);
+      if (shouldShowFurigana(token)) {
+        pushUniqueMeaning(meanings, meaning.short);
+      }
+      lineRow.appendChild(createHighlightTokenSpan(token, meaning));
       column = token.column + token.value.length;
     }
 
@@ -812,34 +830,32 @@ function renderEditorHighlight(source) {
       lineRow.appendChild(document.createTextNode(lines[lineIndex].slice(column - 1)));
     }
 
-    if (lines[lineIndex].length === 0) {
-      lineRow.appendChild(document.createTextNode(" "));
-    }
-
     highlightLayer.appendChild(lineRow);
+
+    const gutterRow = document.createElement("div");
+    gutterRow.className = "fg-line";
+    gutterRow.textContent = meanings.join(" ") || " ";
+    gutterRow.title = meanings.join(" ");
+    furiganaGutter.appendChild(gutterRow);
   }
 }
 
-function createRubyTokenSpan(token) {
-    const meaning = describeToken(token);
-    const tokenSpan = document.createElement("span");
-    tokenSpan.className = "ruby-token ruby-token-" + getTokenClassName(token);
-    tokenSpan.title = meaning.detail;
+function shouldShowFurigana(token) {
+  return token.type === "keyword" || token.type === "operator" || token.type === "identifier" || token.type === "number" || token.type === "comment";
+}
 
-    if (token.type !== "punctuation") {
-      const meaningText = document.createElement("span");
-      meaningText.className = "ruby-meaning";
-      meaningText.textContent = meaning.short;
-      meaningText.title = meaning.detail;
-      tokenSpan.appendChild(meaningText);
-    }
+function pushUniqueMeaning(meanings, shortMeaning) {
+  if (meanings.indexOf(shortMeaning) === -1) {
+    meanings.push(shortMeaning);
+  }
+}
 
-    const codeText = document.createElement("span");
-    codeText.className = "ruby-code";
-    codeText.textContent = getTokenDisplayValue(token);
-
-    tokenSpan.appendChild(codeText);
-    return tokenSpan;
+function createHighlightTokenSpan(token, meaning) {
+  const tokenSpan = document.createElement("span");
+  tokenSpan.className = "token-" + getTokenClassName(token);
+  tokenSpan.title = meaning.detail;
+  tokenSpan.textContent = getTokenDisplayValue(token);
+  return tokenSpan;
 }
 
 function groupTokensByLine(tokens) {
@@ -1622,7 +1638,7 @@ function updateCursorStatus() {
   const token = findTokenAtCursor(source, codeEditor.selectionStart);
   if (token === null) {
     statusToken.textContent = "コードの意味";
-    tokenDetail.textContent = "気になる部品にカーソルを置くと、ここに詳しい意味が表示されます。";
+    tokenDetail.textContent = "カーソル位置の部品の意味がここに表示されます。";
     return;
   }
 
@@ -1666,6 +1682,23 @@ codeEditor.addEventListener("scroll", syncEditorScroll);
 codeEditor.addEventListener("keyup", updateCursorStatus);
 codeEditor.addEventListener("click", updateCursorStatus);
 codeEditor.addEventListener("select", updateCursorStatus);
+codeEditor.addEventListener("compositionstart", function () {
+  editorWrap.classList.add("is-composing");
+});
+codeEditor.addEventListener("compositionupdate", updateEditorView);
+codeEditor.addEventListener("compositionend", function () {
+  editorWrap.classList.remove("is-composing");
+  updateEditorView();
+});
+document.addEventListener("selectionchange", function () {
+  if (document.activeElement === codeEditor) {
+    updateCursorStatus();
+  }
+});
+window.addEventListener("resize", syncEditorOverlay);
+if (typeof ResizeObserver === "function") {
+  new ResizeObserver(syncEditorOverlay).observe(codeEditor);
+}
 runButton.addEventListener("click", applyCodeToPreview);
 resetCodeButton.addEventListener("click", resetCode);
 furiganaToggle.addEventListener("change", updateEditorView);

@@ -9,9 +9,11 @@
 </head>
 <body>
   <header class="title-bar">
-    <img class="title-logo" src="owl-logo.png" alt="Owl Technology">
+    <div class="title-logo-frame">
+      <img class="title-logo" src="owl-logo.png" alt="Owl Technology">
+    </div>
     <h1 class="title-name">OWL JS Studio</h1>
-    <p class="title-copy">左のコードを書き換えて、自分だけの3択クイズを作りましょう</p>
+    <p class="title-copy">コードを書き換えて3択クイズを作る</p>
   </header>
 
   <div class="workbench">
@@ -33,7 +35,7 @@
     <aside id="guide-sidebar" class="sidebar hidden" aria-labelledby="learning-guide-title">
       <div class="sidebar-header">
         <div>
-          <p class="label">Learning Support</p>
+          <p class="label">Support</p>
           <h2 id="learning-guide-title">学習ガイド</h2>
         </div>
         <button id="guide-close-button" class="icon-button" type="button" title="学習ガイドを閉じる" aria-label="学習ガイドを閉じる">×</button>
@@ -53,9 +55,8 @@
         </section>
 
         <section class="guide-section" aria-labelledby="syntax-heading">
-          <h3 id="syntax-heading" class="sidebar-section-title">構文の説明</h3>
-          <p class="guide-note">エディタでカーソルを置くと、その部品の意味がここに表示されます。</p>
-          <p id="token-detail" class="token-detail">気になる部品にカーソルを置くと、ここに詳しい意味が表示されます。</p>
+          <h3 id="syntax-heading" class="sidebar-section-title">構文</h3>
+          <p id="token-detail" class="token-detail">カーソル位置の部品の意味がここに表示されます。</p>
         </section>
       </div>
     </aside>
@@ -68,23 +69,20 @@
         </div>
         <div class="editor-toolbar">
           <label class="toggle-control" for="furigana-toggle">
-            <input id="furigana-toggle" type="checkbox" checked>
-            <span id="furigana-toggle-label">ふりがな ON</span>
+            <input id="furigana-toggle" type="checkbox">
+            <span id="furigana-toggle-label">ふりがな OFF</span>
           </label>
-          <button id="run-button" class="main-button" type="button">実行する</button>
-          <button id="reset-code-button" class="sub-button" type="button">初期状態に戻す</button>
+          <button id="run-button" class="main-button" type="button">実行</button>
+          <button id="reset-code-button" class="sub-button" type="button">リセット</button>
         </div>
       </div>
 
-      <p class="help-text">
-        変更できるのは、問題文・選択肢の文字列と、if文の正解番号だけです。正解番号は0、1、2のどれかを使います。
-      </p>
-
-      <div id="editor-wrap" class="editor-wrap furigana-on">
+      <div id="editor-wrap" class="editor-wrap furigana-off">
         <pre id="line-numbers" class="line-numbers" aria-hidden="true">1</pre>
+        <pre id="furigana-gutter" class="furigana-gutter" aria-hidden="true"></pre>
         <div class="code-area">
           <pre id="highlight-layer" class="highlight-layer" aria-hidden="true"></pre>
-          <textarea id="code-editor" class="code-editor" spellcheck="false" wrap="off" aria-label="編集できるJavaScriptコード"></textarea>
+          <textarea id="code-editor" class="code-editor" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="編集できるJavaScriptコード"></textarea>
         </div>
       </div>
 
@@ -138,7 +136,7 @@
     <span id="status-cursor">Ln 1, Col 1</span>
     <span>JavaScript</span>
     <span>UTF-8</span>
-    <span>v0.8</span>
+    <span>v0.8.1</span>
   </footer>
 
   <script src="script.js"></script>
