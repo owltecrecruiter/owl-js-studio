@@ -1,0 +1,125 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OWL JS Studio</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="page-header">
+    <div>
+      <p class="label">OWL 特典教材</p>
+      <h1>OWL JS Studio</h1>
+    </div>
+    <p class="header-copy">左のコードを書き換えて、自分だけの3択クイズを作りましょう。</p>
+  </header>
+
+  <main class="workspace">
+    <section class="ide-panel" aria-labelledby="editor-title">
+      <div class="panel-heading">
+        <div>
+          <p class="label">Step 1</p>
+          <h2 id="editor-title">疑似IDE</h2>
+        </div>
+        <div class="button-row">
+          <button id="run-button" class="main-button" type="button">実行する</button>
+          <button id="reset-code-button" class="sub-button" type="button">初期状態に戻す</button>
+        </div>
+      </div>
+
+      <p class="help-text">
+        変更できるのは、問題文・選択肢の文字列と、if文の正解番号だけです。正解番号は0、1、2のどれかを使います。
+      </p>
+
+      <div class="editor-wrap">
+        <pre id="line-numbers" class="line-numbers" aria-hidden="true">1</pre>
+        <div class="code-area">
+          <pre id="highlight-layer" class="highlight-layer" aria-hidden="true"></pre>
+          <textarea id="code-editor" class="code-editor" spellcheck="false" wrap="off" aria-label="編集できるJavaScriptコード"></textarea>
+        </div>
+      </div>
+
+      <section class="learning-guide" aria-labelledby="learning-guide-title">
+        <div class="guide-header">
+          <div>
+            <p class="label">Learning Support</p>
+            <h3 id="learning-guide-title">学習ガイド</h3>
+          </div>
+          <label class="toggle-control" for="furigana-toggle">
+            <input id="furigana-toggle" type="checkbox" checked>
+            <span id="furigana-toggle-label">ふりがな ON</span>
+          </label>
+        </div>
+
+        <div class="guide-tabs" role="tablist" aria-label="学習ガイドの表示切り替え">
+          <button id="furigana-tab" class="guide-tab active" type="button" role="tab" aria-selected="true" aria-controls="furigana-panel" data-guide-tab="furigana">ふりがな</button>
+          <button id="reading-tab" class="guide-tab" type="button" role="tab" aria-selected="false" aria-controls="reading-panel" data-guide-tab="reading">読み下し</button>
+          <button id="steps-tab" class="guide-tab" type="button" role="tab" aria-selected="false" aria-controls="steps-panel" data-guide-tab="steps">STEPガイド</button>
+        </div>
+
+        <div id="furigana-panel" class="guide-panel" role="tabpanel" aria-labelledby="furigana-tab">
+          <p class="guide-note">コードの部品ごとの意味を確認できます。編集は上のコード欄で行います。</p>
+          <div id="ruby-code-view" class="ruby-code-view" aria-live="polite"></div>
+          <p id="token-detail" class="token-detail">気になる部品を選ぶと、ここに詳しい意味が表示されます。</p>
+        </div>
+
+        <div id="reading-panel" class="guide-panel hidden" role="tabpanel" aria-labelledby="reading-tab">
+          <p class="guide-note">解析できたコードだけを、日本語の文として読み下します。</p>
+          <ol id="reading-list" class="reading-list" aria-live="polite"></ol>
+        </div>
+
+        <div id="steps-panel" class="guide-panel hidden" role="tabpanel" aria-labelledby="steps-tab">
+          <div id="step-buttons" class="step-buttons" aria-label="STEP切り替え"></div>
+          <div class="step-card">
+            <p id="step-title" class="step-title"></p>
+            <p id="step-description" class="step-description"></p>
+            <p id="step-progress" class="step-progress" aria-live="polite"></p>
+            <button id="hint-button" class="sub-button hint-button" type="button">ヒントを見る</button>
+            <ul id="hint-list" class="hint-list" aria-live="polite"></ul>
+          </div>
+        </div>
+      </section>
+
+      <div id="error-box" class="message-box success" aria-live="polite">
+        初期コードを読み込みました。「実行する」を押すと右側のプレビューに反映されます。
+      </div>
+    </section>
+
+    <section class="preview-panel" aria-labelledby="preview-title">
+      <div class="panel-heading">
+        <div>
+          <p class="label">Step 2</p>
+          <h2 id="preview-title">クイズプレビュー</h2>
+        </div>
+      </div>
+
+      <div class="preview-card">
+        <section id="quiz-screen" class="quiz-screen">
+          <p id="question-number" class="question-number">第1問 / 全3問</p>
+          <h3 id="question-text" class="question-text">問題文が入ります</h3>
+
+          <div class="choices">
+            <button id="choice-0" class="choice-button" type="button"></button>
+            <button id="choice-1" class="choice-button" type="button"></button>
+            <button id="choice-2" class="choice-button" type="button"></button>
+          </div>
+
+          <p id="answer-message" class="answer-message" aria-live="polite"></p>
+          <button id="next-button" class="main-button hidden" type="button">次の問題へ</button>
+        </section>
+
+        <section id="result-screen" class="result-screen hidden">
+          <p class="question-number">結果発表</p>
+          <h3 class="question-text">クイズ終了</h3>
+          <p id="score-text" class="score-text"></p>
+          <p id="result-message" class="result-message"></p>
+          <button id="restart-button" class="main-button" type="button">最初からやり直す</button>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

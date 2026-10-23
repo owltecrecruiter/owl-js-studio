@@ -1,0 +1,22 @@
+﻿# Keep the public repository focused on GitHub Pages output.
+# Commit docs/ for Pages; keep source/backend/admin/test files local unless intentionally reviewed.
+*
+
+# Explicit internal/source exclusions
+/.gitignore
+/gas/
+/platform/
+/index.html
+/script.js
+/style.css
+*.local-tests.js
+*tests*.js
+*tests*.html
+*.env
+.env*
+.cursor/
+agent-transcripts/
+
+!.gitignore
+!docs/
+!docs/**

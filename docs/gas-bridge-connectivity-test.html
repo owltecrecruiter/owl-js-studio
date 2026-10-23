@@ -1,0 +1,593 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OWL JS Studio GASブリッジ接続テスト</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Yu Gothic", "Meiryo", system-ui, sans-serif;
+      color: #1f2937;
+      background: #f4f8ff;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+    }
+
+    main {
+      width: min(960px, 100%);
+      margin: 0 auto;
+      padding: 24px;
+      background: #fff;
+      border: 1px solid #d9e4f2;
+      border-radius: 18px;
+      box-shadow: 0 16px 36px rgba(31, 41, 55, 0.08);
+    }
+
+    h1 {
+      margin-top: 0;
+      color: #173b6d;
+    }
+
+    label,
+    input,
+    button {
+      font: inherit;
+    }
+
+    label {
+      display: block;
+      margin-top: 18px;
+      font-weight: 700;
+    }
+
+    input[type="url"] {
+      box-sizing: border-box;
+      width: 100%;
+      margin-top: 8px;
+      padding: 12px;
+      border: 1px solid #adc3df;
+      border-radius: 10px;
+    }
+
+    button {
+      margin-top: 14px;
+      padding: 10px 16px;
+      border: 0;
+      border-radius: 10px;
+      font-weight: 700;
+      color: #fff;
+      background: #2868b6;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      background: #94a3b8;
+      cursor: wait;
+    }
+
+    code {
+      padding: 2px 4px;
+      border-radius: 4px;
+      background: #eef5ff;
+    }
+
+    .note {
+      padding: 12px 14px;
+      background: #fff7ed;
+      border-left: 4px solid #f59e0b;
+      border-radius: 8px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .card {
+      padding: 12px;
+      border: 1px solid #d9e4f2;
+      border-radius: 12px;
+      background: #fbfdff;
+      word-break: break-all;
+    }
+
+    .card strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #334155;
+    }
+
+    #frameWrap {
+      margin-top: 18px;
+      border: 1px dashed #adc3df;
+      border-radius: 12px;
+      background: #f8fbff;
+    }
+
+    #frameWrap.hidden {
+      position: absolute;
+      left: -9999px;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+    }
+
+    iframe {
+      width: 100%;
+      height: 220px;
+      border: 0;
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    pre {
+      overflow: auto;
+      min-height: 120px;
+      padding: 14px;
+      border-radius: 12px;
+      background: #0f172a;
+      color: #e2e8f0;
+      white-space: pre-wrap;
+    }
+
+    .ok {
+      color: #166534;
+      font-weight: 700;
+    }
+
+    .warn {
+      color: #92400e;
+      font-weight: 700;
+    }
+
+    .fail {
+      color: #991b1b;
+      font-weight: 700;
+    }
+
+    .small {
+      margin-top: 6px;
+      color: #64748b;
+      font-size: 0.92rem;
+      font-weight: 400;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>OWL JS Studio GASブリッジ接続テスト</h1>
+    <p>
+      GitHub Pages から GAS HTML Service への <code>postMessage</code> 接続だけを確認します。
+      発行コード、メールアドレス、クイズデータ、作品データは送信しません。
+    </p>
+    <p class="note">
+      GAS側は更新済みの <code>gas/IssuanceBackend.js</code> を貼り付けて再デプロイした Web App を使ってください。
+      推奨構成は learner-only ブリッジを <code>Who has access: Anyone</code> で公開し、
+      <code>LEARNER_PAGE_ORIGIN</code> をこのページのオリジンと完全一致させる構成です。
+      <code>Only myself</code> の Web App は GitHub Pages 埋め込み learner フローには使わないでください。
+    </p>
+
+    <ol>
+      <li>GAS Web App の URL を下の欄に貼り付けます。</li>
+      <li>「接続テストを開始」を押すと iframe を読み込みます。</li>
+      <li>iframe の load 後、安全な ping だけを送信し、pong 応答を待ちます。</li>
+      <li>応答元 origin と iframe source が一致した場合だけ成功にします。</li>
+    </ol>
+
+    <label for="bridgeUrl">GAS Web App URL</label>
+    <input id="bridgeUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" spellcheck="false">
+
+    <label for="replyOriginOverride">期待する応答 origin（任意）</label>
+    <input id="replyOriginOverride" type="url" placeholder="https://...script.googleusercontent.com" autocomplete="off" spellcheck="false">
+    <div class="small">
+      GAS HTML Service が <code>script.google.com</code> ではなく <code>script.googleusercontent.com</code> から応答する場合だけ指定します。
+      空欄の場合は Web App URL の origin と、信頼できる ready メッセージで観測した origin だけを許可します。
+    </div>
+
+    <label>
+      <input id="showFrame" type="checkbox">
+      iframe を画面に表示する
+    </label>
+
+    <button id="startButton" type="button">接続テストを開始</button>
+    <button id="clearButton" type="button">結果をクリア</button>
+
+    <div class="grid" aria-live="polite">
+      <div class="card"><strong>iframe URL</strong><span id="iframeUrl">未入力</span></div>
+      <div class="card"><strong>送信 targetOrigin</strong><span id="targetOrigin">未入力</span></div>
+      <div class="card"><strong>許可する応答 origin</strong><span id="allowedReplyOrigins">未入力</span></div>
+      <div class="card"><strong>iframe load</strong><span id="loadStatus">未実行</span></div>
+      <div class="card"><strong>ready受信</strong><span id="readyStatus">未受信</span></div>
+      <div class="card"><strong>応答 origin</strong><span id="replyOrigin">未受信</span></div>
+      <div class="card"><strong>source確認</strong><span id="sourceStatus">未受信</span></div>
+      <div class="card"><strong>総合結果</strong><span id="resultStatus">未実行</span></div>
+      <div class="card"><strong>送信データ</strong><span>ping/requestId のみ</span></div>
+    </div>
+
+    <div id="frameWrap" class="hidden" aria-label="GAS Web App iframe preview"></div>
+
+    <h2>ログ</h2>
+    <pre id="log">待機中...</pre>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+
+      const PING_TYPE = "jsquiz:v0.7:ping";
+      const PONG_TYPE = "jsquiz:v0.7:pong";
+      const READY_TYPE = "jsquiz:v0.7:ready";
+      const DIAGNOSTIC_TYPE = "jsquiz:v0.7:diagnostic";
+      const TIMEOUT_MS = 15000;
+      const PING_DELAYS_MS = [0, 2000, 5000];
+
+      const bridgeUrlInput = document.getElementById("bridgeUrl");
+      const replyOriginOverrideInput = document.getElementById("replyOriginOverride");
+      const showFrameInput = document.getElementById("showFrame");
+      const startButton = document.getElementById("startButton");
+      const clearButton = document.getElementById("clearButton");
+      const iframeUrlEl = document.getElementById("iframeUrl");
+      const targetOriginEl = document.getElementById("targetOrigin");
+      const allowedReplyOriginsEl = document.getElementById("allowedReplyOrigins");
+      const loadStatusEl = document.getElementById("loadStatus");
+      const readyStatusEl = document.getElementById("readyStatus");
+      const replyOriginEl = document.getElementById("replyOrigin");
+      const sourceStatusEl = document.getElementById("sourceStatus");
+      const resultStatusEl = document.getElementById("resultStatus");
+      const frameWrap = document.getElementById("frameWrap");
+      const logEl = document.getElementById("log");
+
+      let activeTest = null;
+
+      bridgeUrlInput.addEventListener("input", updateExpectedOrigins);
+      replyOriginOverrideInput.addEventListener("input", updateExpectedOrigins);
+      showFrameInput.addEventListener("change", updateFrameVisibility);
+      startButton.addEventListener("click", startConnectivityTest);
+      clearButton.addEventListener("click", resetScreen);
+
+      updateExpectedOrigins();
+
+      function startConnectivityTest() {
+        resetActiveTest();
+        const parsed = parseBridgeUrl();
+        if (!parsed.ok) {
+          mark(resultStatusEl, "URLが不正です", "fail");
+          writeLog(parsed.message);
+          return;
+        }
+        const replyOverride = parseOptionalOrigin(replyOriginOverrideInput.value.trim());
+        if (!replyOverride.ok) {
+          mark(resultStatusEl, "応答originが不正です", "fail");
+          writeLog(replyOverride.message);
+          return;
+        }
+
+        const requestId = createRequestId();
+        const iframe = document.createElement("iframe");
+        const allowedReplyOrigins = uniqueOrigins([parsed.origin].concat(replyOverride.origin ? [replyOverride.origin] : []));
+        const state = {
+          iframe: iframe,
+          requestId: requestId,
+          targetOrigin: parsed.origin,
+          allowedReplyOrigins: allowedReplyOrigins,
+          completed: false,
+          timeoutId: 0,
+          pingTimerIds: [],
+          pingAttempts: 0,
+          loadAt: 0,
+          startAt: Date.now()
+        };
+        activeTest = state;
+
+        startButton.disabled = true;
+        resetStatusFields();
+        updateFrameVisibility();
+        renderOriginFields(parsed.url, parsed.origin, allowedReplyOrigins);
+        writeLog([
+          "接続テストを開始しました。",
+          "iframe URL: " + parsed.url,
+          "targetOrigin: " + parsed.origin,
+          "allowed reply origins: " + allowedReplyOrigins.join(", "),
+          "requestId: " + requestId,
+          "送信予定: { type, requestId, sentAt, purpose }",
+          "ワイルドカード targetOrigin（\"*\"）は使用しません。",
+          "GAS側が ready/diagnostic を送れる場合は先にログへ表示します。"
+        ].join("\n"));
+
+        window.addEventListener("message", onMessage);
+        iframe.addEventListener("load", onFrameLoad);
+        iframe.addEventListener("error", onFrameError);
+        iframe.title = "GASブリッジ接続テスト";
+        iframe.src = parsed.url;
+        frameWrap.textContent = "";
+        frameWrap.appendChild(iframe);
+
+        state.timeoutId = window.setTimeout(function () {
+          finish("timeout", [
+            "pong応答がタイムアウトしました。",
+            "確認ポイント:",
+            "- GAS Web App が最新版に再デプロイされているか",
+            "- Web App access が learner-only ブリッジ用の Anyone になっているか（Only myself は埋め込み learner フローの前提にしません）",
+            "- LEARNER_PAGE_ORIGIN がこのページの origin と完全一致しているか",
+            "- 応答 origin が script.googleusercontent.com の場合、期待する応答 origin に明示指定したか",
+            "- ready は来るが source確認が不一致の場合、HTML Service のネストiframe制約でこの方式では安全に成功判定できない可能性があります。"
+          ].join("\n"));
+        }, TIMEOUT_MS);
+
+        function onFrameLoad() {
+          if (!activeTest || activeTest.requestId !== requestId || state.completed) {
+            return;
+          }
+          state.loadAt = Date.now();
+          mark(loadStatusEl, "load済み", "ok");
+          appendLog("iframe load を確認しました。loadまで " + String(state.loadAt - state.startAt) + "ms。ping送信を開始します。");
+          schedulePingAttempts();
+        }
+
+        function onFrameError() {
+          finish("error", "iframe の読み込みエラーを検出しました。URL、Web App公開設定、ブラウザのブロックを確認してください。");
+        }
+
+        function onMessage(event) {
+          if (!activeTest || activeTest.requestId !== requestId || state.completed) {
+            return;
+          }
+
+          const data = event.data || {};
+          const messageType = typeof data.type === "string" ? data.type : "(typeなし)";
+          const originOk = state.allowedReplyOrigins.indexOf(event.origin) !== -1;
+          const sourceOk = event.source === iframe.contentWindow;
+
+          replyOriginEl.textContent = event.origin || "不明";
+          mark(sourceStatusEl, sourceOk ? "一致" : "不一致", sourceOk ? "ok" : "fail");
+          appendLog("message受信: origin=" + (event.origin || "不明") + ", source一致=" + String(sourceOk) + ", type=" + messageType + ", requestId=" + String(data.requestId || ""));
+
+          if (data.type === READY_TYPE) {
+            handleReadyMessage(event, data, sourceOk);
+            return;
+          }
+
+          if (data.type === DIAGNOSTIC_TYPE) {
+            appendLog("GAS diagnostic: " + safeStringify(data));
+            return;
+          }
+
+          if (!originOk) {
+            appendLog("許可していない応答 origin のメッセージを無視しました: " + event.origin);
+            return;
+          }
+          if (!sourceOk) {
+            appendLog("source不一致のメッセージを無視しました。");
+            return;
+          }
+          if (data.type !== PONG_TYPE || data.requestId !== requestId) {
+            appendLog("想定外のメッセージを無視しました: " + safeStringify(data));
+            return;
+          }
+
+          finish("success", [
+            "pong応答を確認しました。",
+            "bridgeVersion: " + String(data.bridgeVersion || "未指定"),
+            "timestamp: " + String(data.timestamp || "未指定"),
+            "observedOrigin: " + String(data.observedOrigin || "未指定"),
+            "locationOrigin: " + String(data.locationOrigin || "未指定"),
+            "learnerOriginConfigured: " + String(data.learnerOriginConfigured)
+          ].join("\n"));
+        }
+
+        function schedulePingAttempts() {
+          PING_DELAYS_MS.forEach(function (delayMs) {
+            const timerId = window.setTimeout(sendPing, delayMs);
+            state.pingTimerIds.push(timerId);
+          });
+        }
+
+        function sendPing() {
+          if (!activeTest || activeTest.requestId !== requestId || state.completed) {
+            return;
+          }
+          state.pingAttempts += 1;
+          appendLog("ping送信 #" + state.pingAttempts + ": targetOrigin=" + parsed.origin);
+          try {
+            iframe.contentWindow.postMessage({
+              type: PING_TYPE,
+              requestId: requestId,
+              sentAt: new Date().toISOString(),
+              purpose: "gas-bridge-connectivity-test"
+            }, parsed.origin);
+          } catch (error) {
+            appendLog("ping送信で例外: " + (error && error.message ? error.message : String(error)));
+          }
+        }
+
+        function handleReadyMessage(event, data, sourceOk) {
+          const origin = event.origin || "";
+          if (!sourceOk) {
+            mark(readyStatusEl, "受信（source不一致）", "warn");
+            appendLog("readyを受信しましたが source が iframe.contentWindow と一致しないため、応答originの自動許可には使いません。");
+            appendLog("ready内容: " + safeStringify(data));
+            return;
+          }
+
+          mark(readyStatusEl, "受信", "ok");
+          if (isHttpsOrigin(origin) && state.allowedReplyOrigins.indexOf(origin) === -1) {
+            state.allowedReplyOrigins.push(origin);
+            renderOriginFields(parsed.url, parsed.origin, state.allowedReplyOrigins);
+            appendLog("信頼できる ready から応答 origin を追加しました: " + origin);
+          }
+          appendLog("ready内容: " + safeStringify(data));
+        }
+
+        state.cleanup = function () {
+          window.removeEventListener("message", onMessage);
+          iframe.removeEventListener("load", onFrameLoad);
+          iframe.removeEventListener("error", onFrameError);
+          state.pingTimerIds.forEach(function (timerId) {
+            window.clearTimeout(timerId);
+          });
+        };
+      }
+
+      function finish(kind, message) {
+        if (!activeTest || activeTest.completed) {
+          return;
+        }
+        activeTest.completed = true;
+        window.clearTimeout(activeTest.timeoutId);
+        if (activeTest.cleanup) {
+          activeTest.cleanup();
+        }
+        startButton.disabled = false;
+
+        if (kind === "success") {
+          mark(resultStatusEl, "成功", "ok");
+        } else if (kind === "timeout") {
+          mark(resultStatusEl, "タイムアウト", "warn");
+          if (loadStatusEl.textContent === "未実行") {
+            mark(loadStatusEl, "未確認", "warn");
+          }
+        } else {
+          mark(resultStatusEl, "失敗", "fail");
+        }
+        appendLog(message);
+      }
+
+      function resetScreen() {
+        resetActiveTest();
+        resetStatusFields();
+        frameWrap.textContent = "";
+        logEl.textContent = "待機中...";
+        startButton.disabled = false;
+      }
+
+      function resetActiveTest() {
+        if (activeTest) {
+          window.clearTimeout(activeTest.timeoutId);
+          if (activeTest.cleanup) {
+            activeTest.cleanup();
+          }
+        }
+        activeTest = null;
+      }
+
+      function resetStatusFields() {
+        mark(iframeUrlEl, "未入力", "");
+        mark(targetOriginEl, "未入力", "");
+        mark(allowedReplyOriginsEl, "未入力", "");
+        mark(loadStatusEl, "未実行", "");
+        mark(readyStatusEl, "未受信", "");
+        mark(replyOriginEl, "未受信", "");
+        mark(sourceStatusEl, "未受信", "");
+        mark(resultStatusEl, "実行中", "warn");
+      }
+
+      function updateExpectedOrigins() {
+        const parsed = parseBridgeUrl();
+        if (parsed.ok) {
+          const replyOverride = parseOptionalOrigin(replyOriginOverrideInput.value.trim());
+          const origins = uniqueOrigins([parsed.origin].concat(replyOverride.ok && replyOverride.origin ? [replyOverride.origin] : []));
+          renderOriginFields(parsed.url, parsed.origin, origins);
+        } else {
+          mark(iframeUrlEl, "未入力またはURL不正", "warn");
+          mark(targetOriginEl, "未入力またはURL不正", "warn");
+          mark(allowedReplyOriginsEl, "未入力またはURL不正", "warn");
+        }
+      }
+
+      function renderOriginFields(url, targetOrigin, allowedReplyOrigins) {
+        mark(iframeUrlEl, url, "ok");
+        mark(targetOriginEl, targetOrigin, "ok");
+        mark(allowedReplyOriginsEl, allowedReplyOrigins.join("\n"), "ok");
+      }
+
+      function updateFrameVisibility() {
+        frameWrap.classList.toggle("hidden", !showFrameInput.checked);
+      }
+
+      function parseBridgeUrl() {
+        const raw = bridgeUrlInput.value.trim();
+        if (!raw) {
+          return { ok: false, message: "GAS Web App URLを入力してください。" };
+        }
+        try {
+          const url = new URL(raw);
+          if (url.protocol !== "https:") {
+            return { ok: false, message: "https:// のGAS Web App URLを指定してください。" };
+          }
+          return { ok: true, url: url.href, origin: url.origin };
+        } catch (error) {
+          return { ok: false, message: "URLを解釈できません: " + error.message };
+        }
+      }
+
+      function parseOptionalOrigin(raw) {
+        if (!raw) {
+          return { ok: true, origin: "" };
+        }
+        try {
+          const url = new URL(raw);
+          if (url.protocol !== "https:") {
+            return { ok: false, message: "期待する応答 origin は https:// で始まる必要があります。" };
+          }
+          return { ok: true, origin: url.origin };
+        } catch (error) {
+          return { ok: false, message: "期待する応答 origin を解釈できません: " + error.message };
+        }
+      }
+
+      function uniqueOrigins(origins) {
+        const output = [];
+        origins.forEach(function (origin) {
+          if (origin && output.indexOf(origin) === -1) {
+            output.push(origin);
+          }
+        });
+        return output;
+      }
+
+      function isHttpsOrigin(origin) {
+        try {
+          const url = new URL(origin);
+          return url.protocol === "https:" && url.origin === origin;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function createRequestId() {
+        if (window.crypto && window.crypto.randomUUID) {
+          return "gas-bridge-test-" + window.crypto.randomUUID();
+        }
+        return "gas-bridge-test-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+      }
+
+      function mark(element, text, className) {
+        element.textContent = text;
+        element.className = className || "";
+      }
+
+      function writeLog(text) {
+        logEl.textContent = text;
+      }
+
+      function appendLog(text) {
+        logEl.textContent = (logEl.textContent === "待機中..." ? "" : logEl.textContent + "\n") + text;
+      }
+
+      function safeStringify(value) {
+        try {
+          return JSON.stringify(value);
+        } catch (error) {
+          return String(value);
+        }
+      }
+    })();
+  </script>
+</body>
+</html>
