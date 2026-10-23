@@ -42,13 +42,42 @@ button {
 .title-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 38px;
-  padding: 0 10px;
+  gap: 12px;
+  height: 52px;
+  padding: 0 12px;
   color: var(--text);
   background: var(--chrome-bg);
   border-bottom: 1px solid #2a2a2a;
   user-select: none;
+}
+
+.brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px 8px 2px 2px;
+  color: #f3f3f3;
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+.brand-link:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.brand-link:hover .company-name {
+  text-decoration: underline;
+}
+
+.brand-link:focus {
+  outline: none;
+}
+
+.brand-link:focus-visible {
+  outline: 2px solid #75beff;
+  outline-offset: 2px;
 }
 
 .title-logo-frame {
@@ -56,19 +85,26 @@ button {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  height: 28px;
+  height: 42px;
   padding: 3px 8px;
-  background: #f4f4f4;
+  background: #ffffff;
   border: 1px solid #d6d6d6;
 }
 
 .title-logo {
   display: block;
-  height: 22px;
+  height: 36px;
   width: auto;
-  max-width: 120px;
+  max-width: 180px;
   object-fit: contain;
   object-position: left center;
+}
+
+.company-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .title-name {
@@ -469,14 +505,41 @@ button {
 }
 
 .preview-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
 }
 
-.preview-header h2 {
+.preview-heading h2 {
   margin: 0;
   color: #e6e6e6;
   font-size: 13px;
+}
+
+.color-helpers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.color-helper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #cccccc;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.color-helper input[type="color"] {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #3e3e42;
+  background: #1e1e1e;
+  cursor: pointer;
 }
 
 .preview-card {
@@ -524,6 +587,28 @@ button {
   margin: 0 0 14px;
   font-size: 13px;
   font-weight: 700;
+}
+
+.maker-credit {
+  margin: 12px 0 0;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+  opacity: 0.78;
+}
+
+.maker-credit a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.maker-credit a:hover {
+  opacity: 1;
+}
+
+.maker-credit a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 
 .result-actions {

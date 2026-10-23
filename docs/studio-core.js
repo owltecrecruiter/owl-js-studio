@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9
+ * OWL JS Studio v0.9.1
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -19,6 +19,10 @@
     maxQuestionLength: 120,
     maxChoiceLength: 80
   });
+
+  var COMPANY_NAME = "アウルテクノロジー";
+  var COMPANY_URL = "https://owl-tec.co.jp/";
+  var MAKER_CREDIT_PREFIX = "制作ツール提供：";
 
   var NAMED_COLORS = Object.freeze({
     white: "#ffffff",
@@ -45,8 +49,8 @@
   var INITIAL_CODE = [
     "// クイズの設定",
     "const gameTitle = \"はじめての3択クイズ\";",
-    "const backgroundColor = \"#eaf3ff\";",
-    "const textColor = \"#1f2937\";",
+    "const backgroundColor = \"rgb(234, 243, 255)\";",
+    "const textColor = \"rgb(31, 41, 55)\";",
     "",
     "// 第1問",
     "const question1 = \"JavaScriptで文字を画面に表示するときに使う命令はどれ？\";",
@@ -109,10 +113,10 @@
     {
       number: 3,
       title: "STEP 3：背景色と文字色を変える",
-      description: "やること：背景色と文字色を、決められた色の値に変えます。変える場所：`backgroundColor` と `textColor`。手順：1) 色を書く 2) 実行する 3) タイトル画面と問題画面の両方を見る。確認：両方に同じ色が付いていればOK。読みにくい色なら警告が出ます。",
+      description: "やること：背景色と文字色を、赤・緑・青の3つの数（RGB）で変えます。変える場所：`backgroundColor` と `textColor` の `rgb(赤, 緑, 青)`。手順：1) 0〜255の整数を書く、または色ピッカーを使う 2) 実行する 3) タイトル画面と問題画面の両方を見る。確認：両方に同じ色が付いていればOK。ピッカーはコード編集の補助です。読みにくい色なら警告が出ます。",
       hints: [
-        "使えるのは `#eaf3ff` のような6桁の色コードか、navy / white / yellow などの決められた色の名前だけです。",
-        "HTMLやCSSを直接書くことはできません。`rgb()` や `url()` も使えません。",
+        "`rgb(234, 243, 255)` は、赤234・緑243・青255 の光の混ぜ方です。どれも 0（光なし）〜255（最大）の整数だけ使えます。",
+        "右側の色ピッカーは、同じ `rgb(...)` をコードに書き込む補助です。HTMLやCSS、`#eaf3ff` のような16進数はここでは使いません。",
         "実行後は「はじめる」で問題画面へ進み、色がタイトルと同じかも確認しましょう。"
       ]
     },
@@ -430,14 +434,14 @@
       var textColor = null;
       try {
         if (values.backgroundColor) {
-          backgroundColor = normalizeColor(values.backgroundColor, "backgroundColor");
+          backgroundColor = normalizeLearnerColor(values.backgroundColor, "backgroundColor");
         }
       } catch (backgroundError) {
         errors.push(backgroundError.message);
       }
       try {
         if (values.textColor) {
-          textColor = normalizeColor(values.textColor, "textColor");
+          textColor = normalizeLearnerColor(values.textColor, "textColor");
         }
       } catch (textColorError) {
         errors.push(textColorError.message);
@@ -672,11 +676,129 @@
     }).join(" / ");
   }
 
+  function parseRgbLiteral(value) {
+    if (typeof value !== "string") {
+      return null;
+    }
+    var match = value.trim().match(/^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/);
+    if (match === null) {
+      return null;
+    }
+    var r = Number(match[1]);
+    var g = Number(match[2]);
+    var b = Number(match[3]);
+    if (String(r) !== match[1] || String(g) !== match[2] || String(b) !== match[3]) {
+      return null;
+    }
+    if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) {
+      return null;
+    }
+    return {
+      r: r,
+      g: g,
+      b: b
+    };
+  }
+
+  function formatRgbLiteral(r, g, b) {
+    return "rgb(" + r + ", " + g + ", " + b + ")";
+  }
+
+  function toHex2(channel) {
+    var hex = channel.toString(16);
+    return hex.length === 1 ? "0" + hex : hex;
+  }
+
+  function rgbToHex(r, g, b) {
+    return "#" + toHex2(r) + toHex2(g) + toHex2(b);
+  }
+
+  function normalizeLearnerColor(value, label) {
+    var rgb = parseRgbLiteral(value);
+    if (rgb === null) {
+      throw createCodeError("`" + label + "` は `rgb(234, 243, 255)` のように、0〜255の整数3つで書いてください。");
+    }
+    return rgbToHex(rgb.r, rgb.g, rgb.b);
+  }
+
+  function findConstStringSpan(source, name) {
+    if (typeof source !== "string" || typeof name !== "string") {
+      return null;
+    }
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+      return null;
+    }
+    var pattern = new RegExp("const\\s+" + name + "\\s*=\\s*\"");
+    var match = pattern.exec(source);
+    if (match === null) {
+      return null;
+    }
+    var valueStart = match.index + match[0].length;
+    var index = valueStart;
+    while (index < source.length) {
+      var current = source[index];
+      if (current === "\\") {
+        index = index + 2;
+        continue;
+      }
+      if (current === "\"") {
+        return {
+          matchStart: match.index,
+          valueStart: valueStart,
+          valueEnd: index,
+          quoteEnd: index + 1
+        };
+      }
+      if (current === "\n") {
+        return null;
+      }
+      index = index + 1;
+    }
+    return null;
+  }
+
+  function readConstStringLiteral(source, name) {
+    var span = findConstStringSpan(source, name);
+    if (span === null) {
+      return null;
+    }
+    return source.slice(span.valueStart, span.valueEnd);
+  }
+
+  function replaceConstStringLiteral(source, name, nextValue) {
+    if (typeof nextValue !== "string") {
+      return null;
+    }
+    if (nextValue.indexOf("\"") !== -1 || nextValue.indexOf("\\") !== -1 || nextValue.indexOf("\n") !== -1) {
+      return null;
+    }
+    var span = findConstStringSpan(source, name);
+    if (span === null) {
+      return null;
+    }
+    return {
+      source: source.slice(0, span.valueStart) + nextValue + source.slice(span.valueEnd),
+      valueStart: span.valueStart,
+      oldEnd: span.valueEnd,
+      newEnd: span.valueStart + nextValue.length
+    };
+  }
+
+  function createMakerCreditHtml() {
+    return "<p class=\"maker-credit\">" + MAKER_CREDIT_PREFIX +
+      "<a href=\"" + COMPANY_URL + "\" target=\"_blank\" rel=\"noopener noreferrer\">" +
+      COMPANY_NAME + "</a></p>";
+  }
+
   function normalizeColor(value, label) {
     if (typeof value !== "string") {
       throw createCodeError("`" + label + "` は文字列にしてください。");
     }
     var trimmed = value.trim();
+    var rgb = parseRgbLiteral(trimmed);
+    if (rgb !== null) {
+      return rgbToHex(rgb.r, rgb.g, rgb.b);
+    }
     if (Object.prototype.hasOwnProperty.call(NAMED_COLORS, trimmed.toLowerCase()) && /^[A-Za-z]+$/.test(trimmed)) {
       return NAMED_COLORS[trimmed.toLowerCase()];
     }
@@ -863,7 +985,7 @@
         done: colorChanged,
         message: colorChanged
           ? "達成：色の設定が変更されています。タイトル画面と問題画面の両方を確認しましょう。"
-          : "未達成：`backgroundColor` と `textColor` を、決められた色の名前か #RRGGBB に変えてみましょう。"
+          : "未達成：`backgroundColor` と `textColor` を `rgb(赤, 緑, 青)` の整数3つに変えてみましょう。"
       };
     }
 
@@ -934,13 +1056,13 @@
     if (value === "backgroundColor") {
       return {
         short: "背景色",
-        detail: "`backgroundColor` は、タイトル画面と問題画面の背景色です。決められた色の名前か #RRGGBB だけ使えます。"
+        detail: "`backgroundColor` は、タイトル画面と問題画面の背景色です。`rgb(赤, 緑, 青)` の 0〜255 の整数だけ使えます。"
       };
     }
     if (value === "textColor") {
       return {
         short: "文字色",
-        detail: "`textColor` は、タイトル画面と問題画面の文字色です。決められた色の名前か #RRGGBB だけ使えます。"
+        detail: "`textColor` は、タイトル画面と問題画面の文字色です。`rgb(赤, 緑, 青)` の 0〜255 の整数だけ使えます。"
       };
     }
 
@@ -1026,6 +1148,8 @@
       "    .result-message { margin: 0 0 18px; font-size: 16px; line-height: 1.6; }\n" +
       "    .result-actions { display: grid; gap: 8px; }\n" +
       "    .work-reference { margin: 16px 0 0; font-size: 12px; word-break: break-all; opacity: 0.8; }\n" +
+      "    .maker-credit { margin: 14px 0 0; font-size: 12px; font-weight: 400; line-height: 1.5; opacity: 0.78; }\n" +
+      "    .maker-credit a { color: inherit; text-decoration: underline; }\n" +
       "    .hidden { display: none; }\n" +
       "  </style>\n" +
       "</head>\n" +
@@ -1036,6 +1160,7 @@
       "      <h1 id=\"game-title\"></h1>\n" +
       "      <p id=\"quiz-total\" class=\"kicker\">全3問</p>\n" +
       "      <button id=\"start-button\" class=\"main-button\" type=\"button\">はじめる</button>\n" +
+      "      " + createMakerCreditHtml() + "\n" +
       "    </section>\n" +
       "    <section id=\"quiz-screen\" class=\"screen hidden\">\n" +
       "      <p id=\"question-number\" class=\"kicker\"></p>\n" +
@@ -1191,6 +1316,9 @@
   return {
     WORK_LIMITS: WORK_LIMITS,
     NAMED_COLORS: NAMED_COLORS,
+    COMPANY_NAME: COMPANY_NAME,
+    COMPANY_URL: COMPANY_URL,
+    MAKER_CREDIT_PREFIX: MAKER_CREDIT_PREFIX,
     INITIAL_CODE: INITIAL_CODE,
     STEP_GUIDE: STEP_GUIDE,
     STEP_FOCUS_NAMES: STEP_FOCUS_NAMES,
@@ -1200,7 +1328,15 @@
     isIdentifierStart: isIdentifierStart,
     isIdentifierPart: isIdentifierPart,
     isDigit: isDigit,
+    parseRgbLiteral: parseRgbLiteral,
+    formatRgbLiteral: formatRgbLiteral,
+    rgbToHex: rgbToHex,
+    hexToRgb: hexToRgb,
+    normalizeLearnerColor: normalizeLearnerColor,
     normalizeColor: normalizeColor,
+    readConstStringLiteral: readConstStringLiteral,
+    replaceConstStringLiteral: replaceConstStringLiteral,
+    createMakerCreditHtml: createMakerCreditHtml,
     isSafeCssColor: isSafeCssColor,
     getContrastWarning: getContrastWarning,
     contrastRatio: contrastRatio,

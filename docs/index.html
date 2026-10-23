@@ -9,9 +9,12 @@
 </head>
 <body>
   <header class="title-bar">
-    <div class="title-logo-frame">
-      <img class="title-logo" src="owl-logo.png" alt="Owl Technology">
-    </div>
+    <a class="brand-link" href="https://owl-tec.co.jp/" target="_blank" rel="noopener noreferrer">
+      <span class="title-logo-frame">
+        <img class="title-logo" src="owl-logo.png" alt="アウルテクノロジー">
+      </span>
+      <span class="company-name">アウルテクノロジー</span>
+    </a>
     <h1 class="title-name">OWL JS Studio</h1>
     <p class="title-copy">コードを書き換えて3択クイズを作る</p>
   </header>
@@ -99,8 +102,20 @@
 
     <section class="preview-panel" aria-labelledby="preview-title">
       <div class="preview-header">
-        <p class="label">Preview</p>
-        <h2 id="preview-title">クイズプレビュー</h2>
+        <div class="preview-heading">
+          <p class="label">Preview</p>
+          <h2 id="preview-title">クイズプレビュー</h2>
+        </div>
+        <div class="color-helpers" role="group" aria-label="色の補助">
+          <label class="color-helper" for="background-color-picker">
+            <span>背景色</span>
+            <input id="background-color-picker" type="color" value="#eaf3ff" aria-label="背景色ピッカー">
+          </label>
+          <label class="color-helper" for="text-color-picker">
+            <span>文字色</span>
+            <input id="text-color-picker" type="color" value="#1f2937" aria-label="文字色ピッカー">
+          </label>
+        </div>
       </div>
 
       <div class="preview-card">
@@ -109,6 +124,7 @@
           <h3 id="game-title" class="game-title">はじめての3択クイズ</h3>
           <p id="quiz-total" class="quiz-total">全3問</p>
           <button id="start-button" class="main-button" type="button">はじめる</button>
+          <p class="maker-credit">制作ツール提供：<a href="https://owl-tec.co.jp/" target="_blank" rel="noopener noreferrer">アウルテクノロジー</a></p>
         </section>
 
         <section id="quiz-screen" class="quiz-screen hidden">
@@ -146,7 +162,7 @@
     <span id="status-cursor">Ln 1, Col 1</span>
     <span>JavaScript</span>
     <span>UTF-8</span>
-    <span>v0.9</span>
+    <span>v0.9.1</span>
   </footer>
 
   <script src="studio-core.js"></script>

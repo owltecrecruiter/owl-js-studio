@@ -19,6 +19,12 @@ const getStepFocusLines = studioCore.getStepFocusLines;
 const describeIdentifier = studioCore.describeIdentifier;
 const getContrastWarning = studioCore.getContrastWarning;
 const createCodeError = studioCore.createCodeError;
+const parseRgbLiteral = studioCore.parseRgbLiteral;
+const formatRgbLiteral = studioCore.formatRgbLiteral;
+const rgbToHex = studioCore.rgbToHex;
+const hexToRgb = studioCore.hexToRgb;
+const readConstStringLiteral = studioCore.readConstStringLiteral;
+const replaceConstStringLiteral = studioCore.replaceConstStringLiteral;
 
 // ==================================================
 // 画面要素
@@ -66,6 +72,8 @@ const scoreText = document.getElementById("score-text");
 const resultMessage = document.getElementById("result-message");
 const retryButton = document.getElementById("retry-button");
 const backToTitleButton = document.getElementById("back-to-title-button");
+const backgroundColorPicker = document.getElementById("background-color-picker");
+const textColorPicker = document.getElementById("text-color-picker");
 
 const choiceButtons = [
   document.getElementById("choice-0"),
@@ -85,6 +93,7 @@ let initialQuizSnapshot = null;
 let currentStep = 1;
 let consoleResizeState = null;
 let guideIsOpen = false;
+let applyingColorPicker = false;
 const revealedHintCounts = {
   1: 0,
   2: 0,
@@ -110,6 +119,7 @@ function updateEditorView() {
   renderEditorHighlight(codeEditor.value);
   syncEditorOverlay();
   updateCursorStatus();
+  syncColorPickersFromCode();
 }
 
 function applyFuriganaMode() {
@@ -657,6 +667,63 @@ function applyCodeToPreview() {
   }
 }
 
+function mapIndexThroughReplacement(index, replacement) {
+  if (index <= replacement.valueStart) {
+    return index;
+  }
+  if (index <= replacement.oldEnd) {
+    return replacement.newEnd;
+  }
+  return index + (replacement.newEnd - replacement.oldEnd);
+}
+
+function applyPickerToCode(constName, hexValue) {
+  const rgb = hexToRgb(hexValue);
+  if (!rgb || Number.isNaN(rgb.r) || Number.isNaN(rgb.g) || Number.isNaN(rgb.b)) {
+    return;
+  }
+
+  const literal = formatRgbLiteral(rgb.r, rgb.g, rgb.b);
+  const replacement = replaceConstStringLiteral(codeEditor.value, constName, literal);
+  if (replacement === null) {
+    return;
+  }
+
+  const start = codeEditor.selectionStart;
+  const end = codeEditor.selectionEnd;
+  applyingColorPicker = true;
+  codeEditor.value = replacement.source;
+  codeEditor.setSelectionRange(
+    mapIndexThroughReplacement(start, replacement),
+    mapIndexThroughReplacement(end, replacement)
+  );
+  updateEditorView();
+  applyingColorPicker = false;
+}
+
+function syncColorPickersFromCode() {
+  if (applyingColorPicker) {
+    return;
+  }
+  syncOneColorPicker("backgroundColor", backgroundColorPicker);
+  syncOneColorPicker("textColor", textColorPicker);
+}
+
+function syncOneColorPicker(constName, picker) {
+  if (!picker) {
+    return;
+  }
+  const literal = readConstStringLiteral(codeEditor.value, constName);
+  const rgb = literal ? parseRgbLiteral(literal) : null;
+  if (rgb === null) {
+    return;
+  }
+  const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+  if (picker.value.toLowerCase() !== hex) {
+    picker.value = hex;
+  }
+}
+
 function applyWorkTheme(work) {
   const surfaces = [titleScreen, quizScreen, resultScreen];
   for (let i = 0; i < surfaces.length; i++) {
@@ -893,6 +960,12 @@ if (typeof ResizeObserver === "function") {
 }
 runButton.addEventListener("click", applyCodeToPreview);
 resetCodeButton.addEventListener("click", resetCode);
+backgroundColorPicker.addEventListener("input", function () {
+  applyPickerToCode("backgroundColor", backgroundColorPicker.value);
+});
+textColorPicker.addEventListener("input", function () {
+  applyPickerToCode("textColor", textColorPicker.value);
+});
 furiganaToggle.addEventListener("change", updateEditorView);
 clearConsoleButton.addEventListener("click", clearConsole);
 consoleResize.addEventListener("mousedown", startConsoleResize);
@@ -942,3 +1015,5 @@ window.getLastValidQuizData = getLastValidQuizData;
 window.generateStandaloneQuizHtmlForCurrentEditor = generateStandaloneQuizHtmlForCurrentEditor;
 window.updateEditorView = updateEditorView;
 window.updateCursorStatus = updateCursorStatus;
+window.applyPickerToCode = applyPickerToCode;
+window.syncColorPickersFromCode = syncColorPickersFromCode;
