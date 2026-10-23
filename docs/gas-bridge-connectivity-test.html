@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -176,8 +176,8 @@
     <ol>
       <li>GAS Web App の URL を下の欄に貼り付けます。</li>
       <li>「接続テストを開始」を押すと iframe を読み込みます。</li>
-      <li>iframe の load 後、安全な ping だけを送信し、pong 応答を待ちます。</li>
-      <li>応答元 origin と iframe source が一致した場合だけ成功にします。</li>
+      <li>iframe URL に一回限りの bridgeSession を付け、GAS からの ready を待ちます。</li>
+      <li>ready の origin と bridgeSession を検証し、実際に応答した frame にだけ安全な ping を送ります。</li>
     </ol>
 
     <label for="bridgeUrl">GAS Web App URL</label>
@@ -207,7 +207,7 @@
       <div class="card"><strong>応答 origin</strong><span id="replyOrigin">未受信</span></div>
       <div class="card"><strong>source確認</strong><span id="sourceStatus">未受信</span></div>
       <div class="card"><strong>総合結果</strong><span id="resultStatus">未実行</span></div>
-      <div class="card"><strong>送信データ</strong><span>ping/requestId のみ</span></div>
+      <div class="card"><strong>送信データ</strong><span>ping/requestId/bridgeSession のみ</span></div>
     </div>
 
     <div id="frameWrap" class="hidden" aria-label="GAS Web App iframe preview"></div>
@@ -269,16 +269,22 @@
         }
 
         const requestId = createRequestId();
+        const bridgeSession = createBridgeSession();
+        const iframeUrl = appendBridgeSession(parsed.url, bridgeSession);
         const iframe = document.createElement("iframe");
         const allowedReplyOrigins = uniqueOrigins([parsed.origin].concat(replyOverride.origin ? [replyOverride.origin] : []));
         const state = {
           iframe: iframe,
           requestId: requestId,
+          bridgeSession: bridgeSession,
           targetOrigin: parsed.origin,
           allowedReplyOrigins: allowedReplyOrigins,
+          trustedBridgeWindow: null,
+          trustedBridgeOrigin: "",
           completed: false,
           timeoutId: 0,
           pingTimerIds: [],
+          pingScheduled: false,
           pingAttempts: 0,
           loadAt: 0,
           startAt: Date.now()
@@ -288,23 +294,24 @@
         startButton.disabled = true;
         resetStatusFields();
         updateFrameVisibility();
-        renderOriginFields(parsed.url, parsed.origin, allowedReplyOrigins);
+        renderOriginFields(iframeUrl, parsed.origin, allowedReplyOrigins);
         writeLog([
           "接続テストを開始しました。",
-          "iframe URL: " + parsed.url,
-          "targetOrigin: " + parsed.origin,
+          "iframe URL: " + iframeUrl,
+          "initial targetOrigin: " + parsed.origin,
           "allowed reply origins: " + allowedReplyOrigins.join(", "),
           "requestId: " + requestId,
-          "送信予定: { type, requestId, sentAt, purpose }",
+          "bridgeSession: " + bridgeSession,
+          "送信予定: { type, requestId, bridgeSession, sentAt, purpose }",
           "ワイルドカード targetOrigin（\"*\"）は使用しません。",
-          "GAS側が ready/diagnostic を送れる場合は先にログへ表示します。"
+          "GAS側の ready を検証後、実際の bridge frame へ ping を送信します。"
         ].join("\n"));
 
         window.addEventListener("message", onMessage);
         iframe.addEventListener("load", onFrameLoad);
         iframe.addEventListener("error", onFrameError);
         iframe.title = "GASブリッジ接続テスト";
-        iframe.src = parsed.url;
+        iframe.src = iframeUrl;
         frameWrap.textContent = "";
         frameWrap.appendChild(iframe);
 
@@ -316,7 +323,8 @@
             "- Web App access が learner-only ブリッジ用の Anyone になっているか（Only myself は埋め込み learner フローの前提にしません）",
             "- LEARNER_PAGE_ORIGIN がこのページの origin と完全一致しているか",
             "- 応答 origin が script.googleusercontent.com の場合、期待する応答 origin に明示指定したか",
-            "- ready は来るが source確認が不一致の場合、HTML Service のネストiframe制約でこの方式では安全に成功判定できない可能性があります。"
+            "- GAS側が bridgeSession を ready/pong に含む最新版として再デプロイされているか",
+            "- ready が通っている場合、ping は outer iframe ではなく ready の event.source へ送信されます。"
           ].join("\n"));
         }, TIMEOUT_MS);
 
@@ -326,8 +334,7 @@
           }
           state.loadAt = Date.now();
           mark(loadStatusEl, "load済み", "ok");
-          appendLog("iframe load を確認しました。loadまで " + String(state.loadAt - state.startAt) + "ms。ping送信を開始します。");
-          schedulePingAttempts();
+          appendLog("iframe load を確認しました。loadまで " + String(state.loadAt - state.startAt) + "ms。GAS bridge の ready を待ちます。");
         }
 
         function onFrameError() {
@@ -341,33 +348,42 @@
 
           const data = event.data || {};
           const messageType = typeof data.type === "string" ? data.type : "(typeなし)";
-          const originOk = state.allowedReplyOrigins.indexOf(event.origin) !== -1;
-          const sourceOk = event.source === iframe.contentWindow;
+          const originOk = isAllowedReplyOrigin(event.origin, state, parsed.origin);
+          const sourceDescription = describeSource(event.source, iframe, state);
+          const sessionOk = data.bridgeSession === state.bridgeSession;
 
           replyOriginEl.textContent = event.origin || "不明";
-          mark(sourceStatusEl, sourceOk ? "一致" : "不一致", sourceOk ? "ok" : "fail");
-          appendLog("message受信: origin=" + (event.origin || "不明") + ", source一致=" + String(sourceOk) + ", type=" + messageType + ", requestId=" + String(data.requestId || ""));
+          mark(sourceStatusEl, sourceDescription.label, sourceDescription.className);
+          appendLog("message受信: origin=" + (event.origin || "不明") + ", source=" + sourceDescription.label + ", type=" + messageType + ", requestId=" + String(data.requestId || "") + ", bridgeSession一致=" + String(sessionOk));
 
           if (data.type === READY_TYPE) {
-            handleReadyMessage(event, data, sourceOk);
+            handleReadyMessage(event, data, originOk, sessionOk);
             return;
           }
 
           if (data.type === DIAGNOSTIC_TYPE) {
-            appendLog("GAS diagnostic: " + safeStringify(data));
+            if (originOk && sessionOk && event.source === state.trustedBridgeWindow) {
+              appendLog("GAS diagnostic: " + safeStringify(data));
+            } else {
+              appendLog("未検証または別sessionの diagnostic を無視しました。");
+            }
             return;
           }
 
-          if (!originOk) {
-            appendLog("許可していない応答 origin のメッセージを無視しました: " + event.origin);
-            return;
-          }
-          if (!sourceOk) {
-            appendLog("source不一致のメッセージを無視しました。");
-            return;
-          }
-          if (data.type !== PONG_TYPE || data.requestId !== requestId) {
+          if (data.type !== PONG_TYPE) {
             appendLog("想定外のメッセージを無視しました: " + safeStringify(data));
+            return;
+          }
+          if (!originOk || event.origin !== state.trustedBridgeOrigin) {
+            appendLog("信頼済み origin ではない pong を無視しました: " + event.origin);
+            return;
+          }
+          if (event.source !== state.trustedBridgeWindow) {
+            appendLog("readyで信頼した bridge frame 以外からの pong を無視しました。");
+            return;
+          }
+          if (!sessionOk || data.requestId !== requestId) {
+            appendLog("bridgeSession または requestId が一致しない pong を無視しました: " + safeStringify(data));
             return;
           }
 
@@ -382,6 +398,10 @@
         }
 
         function schedulePingAttempts() {
+          if (state.pingScheduled) {
+            return;
+          }
+          state.pingScheduled = true;
           PING_DELAYS_MS.forEach(function (delayMs) {
             const timerId = window.setTimeout(sendPing, delayMs);
             state.pingTimerIds.push(timerId);
@@ -392,36 +412,60 @@
           if (!activeTest || activeTest.requestId !== requestId || state.completed) {
             return;
           }
+          if (!state.trustedBridgeWindow || !state.trustedBridgeOrigin) {
+            appendLog("ping送信待機: 検証済み ready がまだありません。");
+            return;
+          }
           state.pingAttempts += 1;
-          appendLog("ping送信 #" + state.pingAttempts + ": targetOrigin=" + parsed.origin);
+          appendLog("ping送信 #" + state.pingAttempts + ": targetOrigin=" + state.trustedBridgeOrigin + ", route=trusted ready source");
           try {
-            iframe.contentWindow.postMessage({
+            state.trustedBridgeWindow.postMessage({
               type: PING_TYPE,
               requestId: requestId,
+              bridgeSession: bridgeSession,
               sentAt: new Date().toISOString(),
               purpose: "gas-bridge-connectivity-test"
-            }, parsed.origin);
+            }, state.trustedBridgeOrigin);
           } catch (error) {
             appendLog("ping送信で例外: " + (error && error.message ? error.message : String(error)));
           }
         }
 
-        function handleReadyMessage(event, data, sourceOk) {
+        function handleReadyMessage(event, data, originOk, sessionOk) {
           const origin = event.origin || "";
-          if (!sourceOk) {
-            mark(readyStatusEl, "受信（source不一致）", "warn");
-            appendLog("readyを受信しましたが source が iframe.contentWindow と一致しないため、応答originの自動許可には使いません。");
+          if (!originOk) {
+            mark(readyStatusEl, "受信（origin未許可）", "warn");
+            appendLog("readyを受信しましたが origin が許可対象ではないため無視しました: " + origin);
+            appendLog("ready内容: " + safeStringify(data));
+            return;
+          }
+          if (!sessionOk) {
+            mark(readyStatusEl, "受信（session不一致）", "warn");
+            appendLog("readyを受信しましたが bridgeSession が一致しないため無視しました。");
+            appendLog("ready内容: " + safeStringify(data));
+            return;
+          }
+          if (!isWindowSource(event.source)) {
+            mark(readyStatusEl, "受信（source不正）", "warn");
+            appendLog("readyを受信しましたが返信可能な Window source ではないため無視しました。");
             appendLog("ready内容: " + safeStringify(data));
             return;
           }
 
           mark(readyStatusEl, "受信", "ok");
+          state.trustedBridgeWindow = event.source;
+          state.trustedBridgeOrigin = origin;
+          mark(sourceStatusEl, event.source === iframe.contentWindow ? "outer iframe一致" : "ready sourceを信頼", "ok");
           if (isHttpsOrigin(origin) && state.allowedReplyOrigins.indexOf(origin) === -1) {
             state.allowedReplyOrigins.push(origin);
-            renderOriginFields(parsed.url, parsed.origin, state.allowedReplyOrigins);
-            appendLog("信頼できる ready から応答 origin を追加しました: " + origin);
+            renderOriginFields(iframeUrl, state.trustedBridgeOrigin, state.allowedReplyOrigins);
+            appendLog("bridgeSession付き ready から応答 origin を追加しました: " + origin);
+          } else {
+            renderOriginFields(iframeUrl, state.trustedBridgeOrigin, state.allowedReplyOrigins);
           }
+          appendLog("信頼済み bridgeWindow を ready の event.source に設定しました。outer iframe と異なる場合も以後はこの window へ送信します。");
           appendLog("ready内容: " + safeStringify(data));
+          schedulePingAttempts();
         }
 
         state.cleanup = function () {
@@ -541,6 +585,39 @@
         }
       }
 
+      function appendBridgeSession(urlText, bridgeSession) {
+        const url = new URL(urlText);
+        url.searchParams.set("bridgeSession", bridgeSession);
+        return url.href;
+      }
+
+      function isAllowedReplyOrigin(origin, state, webAppOrigin) {
+        if (!isHttpsOrigin(origin)) {
+          return false;
+        }
+        if (state.allowedReplyOrigins.indexOf(origin) !== -1) {
+          return true;
+        }
+        return webAppOrigin === "https://script.google.com" && /\.script\.googleusercontent\.com$/.test(new URL(origin).hostname);
+      }
+
+      function isWindowSource(source) {
+        return source && typeof source.postMessage === "function";
+      }
+
+      function describeSource(source, iframe, state) {
+        if (state.trustedBridgeWindow && source === state.trustedBridgeWindow) {
+          return { label: "trusted bridge一致", className: "ok" };
+        }
+        if (source === iframe.contentWindow) {
+          return { label: "outer iframe一致", className: "ok" };
+        }
+        if (isWindowSource(source)) {
+          return { label: "outer不一致・返信可能", className: "warn" };
+        }
+        return { label: "不明", className: "fail" };
+      }
+
       function uniqueOrigins(origins) {
         const output = [];
         origins.forEach(function (origin) {
@@ -565,6 +642,13 @@
           return "gas-bridge-test-" + window.crypto.randomUUID();
         }
         return "gas-bridge-test-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+      }
+
+      function createBridgeSession() {
+        if (window.crypto && window.crypto.randomUUID) {
+          return "bridge-" + window.crypto.randomUUID();
+        }
+        return "bridge-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
       }
 
       function mark(element, text, className) {
