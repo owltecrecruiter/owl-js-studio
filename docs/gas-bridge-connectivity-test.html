@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OWL JS Studio GASブリッジ接続テスト</title>
+  <title>GASブリッジ接続テスト v0.7</title>
   <style>
     :root {
       color-scheme: light;
@@ -161,7 +161,7 @@
 </head>
 <body>
   <main>
-    <h1>OWL JS Studio GASブリッジ接続テスト</h1>
+    <h1>GASブリッジ接続テスト v0.7</h1>
     <p>
       GitHub Pages から GAS HTML Service への <code>postMessage</code> 接続だけを確認します。
       発行コード、メールアドレス、クイズデータ、作品データは送信しません。
@@ -176,7 +176,7 @@
     <ol>
       <li>GAS Web App の URL を下の欄に貼り付けます。</li>
       <li>「接続テストを開始」を押すと iframe を読み込みます。</li>
-      <li>iframe URL に一回限りの bridgeSession を付け、GAS からの ready を待ちます。</li>
+      <li>iframe URL の query と hash の両方に一回限りの bridgeSession を付け、GAS からの ready を待ちます。</li>
       <li>ready の origin と bridgeSession を検証し、実際に応答した frame にだけ安全な ping を送ります。</li>
     </ol>
 
@@ -186,8 +186,7 @@
     <label for="replyOriginOverride">期待する応答 origin（任意）</label>
     <input id="replyOriginOverride" type="url" placeholder="https://...script.googleusercontent.com" autocomplete="off" spellcheck="false">
     <div class="small">
-      GAS HTML Service が <code>script.google.com</code> ではなく <code>script.googleusercontent.com</code> から応答する場合だけ指定します。
-      空欄の場合は Web App URL の origin と、信頼できる ready メッセージで観測した origin だけを許可します。
+      通常は空欄のままで構いません。空欄でも <code>https://*.script.googleusercontent.com</code> および実際の HTML Service ホスト（<code>https://*-script.googleusercontent.com</code>）からの ready を許可し、session 一致後はその正確な origin だけを ping の targetOrigin に使います。明示指定する場合は観測した exact origin を入れてください。
     </div>
 
     <label>
@@ -322,9 +321,9 @@
             "- GAS Web App が最新版に再デプロイされているか",
             "- Web App access が learner-only ブリッジ用の Anyone になっているか（Only myself は埋め込み learner フローの前提にしません）",
             "- LEARNER_PAGE_ORIGIN がこのページの origin と完全一致しているか",
-            "- 応答 origin が script.googleusercontent.com の場合、期待する応答 origin に明示指定したか",
-            "- GAS側が bridgeSession を ready/pong に含む最新版として再デプロイされているか",
-            "- ready が通っている場合、ping は outer iframe ではなく ready の event.source へ送信されます。"
+            "- GAS側が query/hash から bridgeSession を読む最新版として再デプロイされているか",
+            "- ready の origin が script.googleusercontent.com 系でも、https かつホスト名が許可パターンなら自動許可されるか",
+            "- ready が通っている場合、ping は outer iframe ではなく ready の event.source へ、その exact origin を targetOrigin として送信されます。"
           ].join("\n"));
         }, TIMEOUT_MS);
 
@@ -588,6 +587,7 @@
       function appendBridgeSession(urlText, bridgeSession) {
         const url = new URL(urlText);
         url.searchParams.set("bridgeSession", bridgeSession);
+        url.hash = "bridgeSession=" + encodeURIComponent(bridgeSession);
         return url.href;
       }
 
@@ -598,7 +598,43 @@
         if (state.allowedReplyOrigins.indexOf(origin) !== -1) {
           return true;
         }
-        return webAppOrigin === "https://script.google.com" && /\.script\.googleusercontent\.com$/.test(new URL(origin).hostname);
+        return isAppsScriptWebAppOrigin(webAppOrigin) && isScriptGoogleUserContentOrigin(origin);
+      }
+
+      function isAppsScriptWebAppOrigin(origin) {
+        try {
+          const url = new URL(origin);
+          if (url.protocol !== "https:" || url.origin !== origin) {
+            return false;
+          }
+          const host = url.hostname.toLowerCase();
+          return host === "script.google.com" || isScriptGoogleUserContentHost(host);
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function isScriptGoogleUserContentOrigin(origin) {
+        try {
+          const url = new URL(origin);
+          if (url.protocol !== "https:" || url.origin !== origin) {
+            return false;
+          }
+          return isScriptGoogleUserContentHost(url.hostname);
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function isScriptGoogleUserContentHost(hostname) {
+        const host = String(hostname || "").toLowerCase();
+        if (host === "script.googleusercontent.com") {
+          return true;
+        }
+        if (host.endsWith(".script.googleusercontent.com") && host.length > ".script.googleusercontent.com".length) {
+          return true;
+        }
+        return /(?:^|\.)[a-z0-9-]+-script\.googleusercontent\.com$/.test(host);
       }
 
       function isWindowSource(source) {
