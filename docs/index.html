@@ -104,7 +104,14 @@
       </div>
 
       <div class="preview-card">
-        <section id="quiz-screen" class="quiz-screen">
+        <section id="title-screen" class="title-screen">
+          <p class="quiz-kicker">3択クイズ</p>
+          <h3 id="game-title" class="game-title">はじめての3択クイズ</h3>
+          <p id="quiz-total" class="quiz-total">全3問</p>
+          <button id="start-button" class="main-button" type="button">はじめる</button>
+        </section>
+
+        <section id="quiz-screen" class="quiz-screen hidden">
           <p id="question-number" class="question-number">第1問 / 全3問</p>
           <h3 id="question-text" class="question-text">問題文が入ります</h3>
 
@@ -123,7 +130,10 @@
           <h3 class="question-text">クイズ終了</h3>
           <p id="score-text" class="score-text"></p>
           <p id="result-message" class="result-message"></p>
-          <button id="restart-button" class="main-button" type="button">最初からやり直す</button>
+          <div class="result-actions">
+            <button id="retry-button" class="main-button" type="button">もう一度挑戦する</button>
+            <button id="back-to-title-button" class="main-button" type="button">タイトルへ戻る</button>
+          </div>
         </section>
       </div>
     </section>
@@ -136,9 +146,10 @@
     <span id="status-cursor">Ln 1, Col 1</span>
     <span>JavaScript</span>
     <span>UTF-8</span>
-    <span>v0.8.1</span>
+    <span>v0.9</span>
   </footer>
 
+  <script src="studio-core.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

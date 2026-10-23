@@ -490,6 +490,7 @@ button {
   background: #1e1e1e;
 }
 
+.title-screen,
 .quiz-screen,
 .result-screen {
   width: 100%;
@@ -499,6 +500,39 @@ button {
   color: #1f2937;
   background: #ffffff;
   border: 1px solid #d6d6d6;
+}
+
+.title-screen {
+  text-align: center;
+  padding: 18px 16px 16px;
+}
+
+.quiz-kicker {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.game-title {
+  margin: 0 0 8px;
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+.quiz-total {
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.result-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.hl-line-focus {
+  background: rgba(14, 99, 156, 0.18);
 }
 
 .question-number {
@@ -523,16 +557,16 @@ button {
 .choice-button {
   width: 100%;
   padding: 8px 10px;
-  color: #222;
-  background: #f4f8fd;
-  border: 1px solid #c9ddf7;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
   font-size: 14px;
   text-align: left;
   cursor: pointer;
 }
 
 .choice-button:hover:not(:disabled) {
-  background: #e7f1fb;
+  opacity: 0.88;
 }
 
 .choice-button:disabled {
@@ -541,9 +575,7 @@ button {
 }
 
 .choice-button.selected {
-  color: #ffffff;
-  background: #2868b6;
-  border-color: #2868b6;
+  outline: 2px solid currentColor;
 }
 
 .answer-message {
@@ -553,9 +585,13 @@ button {
   font-weight: 700;
 }
 
+.title-screen .main-button,
 .quiz-screen .main-button,
 .result-screen .main-button {
   width: 100%;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
 }
 
 .answer-message.correct {
