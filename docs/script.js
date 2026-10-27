@@ -751,6 +751,25 @@ function renderStepButtons(parsed, parseError) {
     });
     stepButtons.appendChild(button);
   }
+
+  const clearButton = document.createElement("button");
+  clearButton.id = "step-clear-button";
+  clearButton.type = "button";
+  clearButton.className = "step-clear-button";
+  clearButton.textContent = "CLEAR";
+  const allDone = areAllStepsComplete(parsed, parseError, initialQuizSnapshot, getStepEvidence()) === true;
+  clearButton.disabled = !allDone;
+  if (allDone) {
+    clearButton.classList.add("ready");
+  }
+  clearButton.title = allDone ? "発行コードを入力して完成したクイズを受け取る" : "STEP 1〜5をすべて達成すると有効になります";
+  clearButton.addEventListener("click", function () {
+    if (clearButton.disabled) {
+      return;
+    }
+    openIssuanceDialog();
+  });
+  stepButtons.appendChild(clearButton);
 }
 
 function renderHints() {

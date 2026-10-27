@@ -5,6 +5,7 @@ This directory contains GAS-compatible source and local mock tests. It does not 
 ## File Structure
 
 - `IssuanceBackend.js`: GAS-compatible backend source. Copy to Apps Script as `Code.gs` or split into `.gs` files.
+- `embedded-brand-assets.js`: official OWL Technology logo data URI. Copy into the learner GAS project so issued HTML can embed the logo.
 - `IssuanceBackend.local-tests.js`: Node-based local mock tests for the GAS backend.
 - `admin/`: interviewer issuance web app. Deploy in a **separate** Apps Script project from the public learner bridge. See `admin/README.md`.
 - `../platform/issuance-v06-client.js`: optional GitHub Pages bridge helper. It is not loaded by default and contains no production endpoint or secrets.
@@ -33,7 +34,7 @@ Concrete data route:
 5. GitHub Pages accepts `ready` only when the reply origin is allowed/expected and `bridgeSession` matches. It then stores `event.source` as the trusted bridge frame, even when it differs from the outer `iframe.contentWindow`.
 6. GitHub Pages sends `{ type: "jsquiz:v0.6:issue", requestId, bridgeSession, payload }` to the trusted ready source using the exact ready origin as `targetOrigin`.
 7. The GAS HTML Service page receives the message, verifies `event.origin === LEARNER_PAGE_ORIGIN` and `data.bridgeSession === bridgeSession`, then calls `google.script.run.issueWorkFromBridge(payload)`.
-8. GAS validates code, requestId, email, and quiz data server-side, writes state to the spreadsheet, saves the generated HTML to Drive where possible, and sends email where configured.
+8. GAS validates code, requestId, email, and quiz data server-side, writes state to the spreadsheet, saves the generated HTML to Drive where possible, and emails the HTML as a `.html` attachment to the registered address.
 9. GAS replies to `event.source.postMessage(...)` using the exact allowed origin, never `"*"`, and includes the same `bridgeSession`.
 10. GitHub Pages accepts result/error replies only from the trusted ready source, exact trusted ready origin, matching requestId, and matching `bridgeSession`.
 
@@ -189,6 +190,7 @@ Security risk assessment for `Anyone` learner bridge:
 - `requestId` is stored in `issuance_requests`; completed retries return the cached result.
 - `requestHash` binds `requestId` to code, email, and validated quiz data so the same `requestId` cannot be reused for different work data.
 - v0.9 `quizData` is a work object `{ gameTitle, backgroundColor, textColor, questions }` rather than a bare 3-question array. Colors must be `#RRGGBB` or a named allowlist value. After updating `IssuanceBackend.js`, redeploy the Web App so issued HTML matches the learner preview (title screen, colors, 3 questions, results).
+- After Drive save, the learner GAS project emails the generated UTF-8 `.html` file as an attachment to the registered address. Copy `embedded-brand-assets.js` into that project so the official logo can be embedded. Direct HTML attachments can be blocked by some mail services; do not treat a blocked send as success.
 - Delivery failure does not create a second issuance. Admin resend is separate.
 - If HTML generation and Drive save succeed but mail fails, `htmlFileId`, `workId`, history, and current state are preserved for admin resend.
 - If Drive file creation itself fails before a file ID exists, the code is marked used with delivery failure but there is no generated file to resend. The operator must reissue manually after reviewing history; this real-environment failure mode needs production rehearsal.

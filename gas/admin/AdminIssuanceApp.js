@@ -222,7 +222,42 @@ var OwlJsAdminIssuance = (function (root) {
     }
   }
 
+  function getOfficialLogoSrc() {
+    var uri = "";
+    if (root && typeof root.OWL_JS_STUDIO_LOGO_DATA_URI === "string") {
+      uri = root.OWL_JS_STUDIO_LOGO_DATA_URI;
+    }
+    if (uri.indexOf("data:image/") === 0) {
+      return uri;
+    }
+    return "https://owltecrecruiter.github.io/owl-js-studio/owl-logo.png";
+  }
+
+  function getStudioUrl() {
+    if (root && typeof root.OWL_JS_STUDIO_URL === "string" && root.OWL_JS_STUDIO_URL) {
+      return root.OWL_JS_STUDIO_URL;
+    }
+    return "https://owltecrecruiter.github.io/owl-js-studio/";
+  }
+
+  function getStudioQrMarkup() {
+    if (root && typeof root.OWL_JS_STUDIO_QR_SVG === "string") {
+      return root.OWL_JS_STUDIO_QR_SVG;
+    }
+    return "";
+  }
+
+  function escapeAttribute(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/\"/g, "&quot;")
+      .replace(/</g, "&lt;");
+  }
+
   function createInterviewerAppHtml() {
+    var logoSrc = escapeAttribute(getOfficialLogoSrc());
+    var studioUrl = escapeAttribute(getStudioUrl());
+    var qrMarkup = getStudioQrMarkup();
     return [
       "<!DOCTYPE html>",
       "<html lang=\"ja\">",
@@ -231,37 +266,68 @@ var OwlJsAdminIssuance = (function (root) {
       "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">",
       "<title>OWL JS Studio 発行コード管理</title>",
       "<style>",
-      ":root{--chrome-bg:#243044;--editor-bg:#1e1e1e;--sidebar-bg:#1e2736;--border:#314056;--text:#e6edf5;--text-dim:#9aa8b8;--accent:#2b7fc1;--accent-strong:#1e6bb8}",
+      ":root{--bg:#f4f6f8;--card:#ffffff;--text:#1f2937;--muted:#5b6775;--line:#d7dee7;--accent:#1e6bb8;--accent-soft:#e8f2fb}",
       "*{box-sizing:border-box}",
-      "html,body{margin:0;min-height:100%;font-family:\"Yu Gothic\",\"Meiryo\",sans-serif;color:var(--text);background:var(--editor-bg)}",
+      "html,body{margin:0;min-height:100%;font-family:\"Yu Gothic\",\"Meiryo\",sans-serif;color:var(--text);background:var(--bg)}",
       "body{display:flex;flex-direction:column}",
-      "header{display:flex;align-items:center;gap:12px;height:52px;padding:0 16px;background:var(--chrome-bg);border-bottom:1px solid var(--border)}",
-      "h1{margin:0;font-size:16px;font-weight:700}",
-      ".sub{margin:0;color:var(--text-dim);font-size:12px}",
-      "main{width:min(480px,100%);margin:32px auto;padding:0 16px 40px}",
-      "form,section{padding:16px;background:var(--sidebar-bg);border:1px solid var(--border);border-top:2px solid var(--accent)}",
-      "label{display:block;margin:12px 0 6px;color:var(--text-dim);font-size:12px;font-weight:700}",
-      "input{display:block;width:100%;padding:8px 10px;color:var(--text);background:#1e1e1e;border:1px solid #3e3e42;font:inherit}",
+      "header{display:flex;align-items:center;gap:14px;min-height:72px;padding:12px 28px;background:#fff;border-bottom:1px solid var(--line)}",
+      ".header-logo{width:54px;height:auto}",
+      "h1{margin:0;font-size:22px;font-weight:700}",
+      ".sub{margin:2px 0 0;color:var(--muted);font-size:13px}",
+      "main{width:min(1120px,100%);margin:0 auto;padding:32px 24px 48px}",
+      ".home-grid{display:grid;grid-template-columns:1.05fr 1.2fr 0.95fr;gap:24px}",
+      ".panel{padding:24px;background:var(--card);border:1px solid var(--line);border-radius:12px}",
+      ".panel h2{margin:0 0 12px;font-size:18px}",
+      ".panel p,.panel li{color:var(--muted);font-size:14px;line-height:1.7}",
+      ".panel ol{margin:0;padding-left:18px}",
+      ".panel li+li{margin-top:8px}",
+      "label{display:block;margin:14px 0 6px;color:var(--muted);font-size:12px;font-weight:700}",
+      "input{display:block;width:100%;padding:10px 12px;color:var(--text);background:#fff;border:1px solid #c5d0dc;border-radius:8px;font:inherit}",
       "input:focus{outline:2px solid #75beff;outline-offset:1px;border-color:var(--accent)}",
-      "button{font-family:inherit;font-weight:700;border:0;cursor:pointer}",
-      ".main-button{margin-top:16px;padding:10px 12px;width:100%;color:#fff;background:var(--accent-strong)}",
-      ".main-button:hover{background:var(--accent)}",
-      ".main-button:disabled{color:#9aa8b8;background:#314056;cursor:default}",
-      ".sub-button{margin-top:8px;padding:8px 12px;width:100%;color:var(--text);background:#314056}",
-      ".status{min-height:1.4em;margin:10px 0 0;color:#e2c08d;font-size:13px;line-height:1.6}",
-      ".status.error{color:#f48771}",
+      "button{font-family:inherit;font-weight:700;border:0;cursor:pointer;border-radius:8px}",
+      ".main-button{margin-top:16px;padding:12px 14px;width:100%;color:#fff;background:var(--accent)}",
+      ".main-button:hover{background:#185a9c}",
+      ".main-button:disabled{color:#9aa8b8;background:#d7dee7;cursor:default}",
+      ".sub-button{margin-top:8px;padding:10px 12px;width:100%;color:var(--text);background:var(--accent-soft)}",
+      ".status{min-height:1.4em;margin:10px 0 0;color:#8a6d3b;font-size:13px;line-height:1.6}",
+      ".status.error{color:#c0342b}",
       ".hidden{display:none}",
-      ".code-value{margin:12px 0;padding:12px;color:#b5cea8;background:#1f3a24;border:1px solid #3f6b43;font-family:Consolas,\"Courier New\",monospace;font-size:18px;letter-spacing:.04em;word-break:break-all}",
-      ".result-title{margin:0 0 12px;color:#b5cea8;font-size:16px}",
+      ".code-value{margin:12px 0;padding:12px;color:#146c2e;background:#f3faf4;border:1px solid #b7e0c2;border-radius:8px;font-family:Consolas,\"Courier New\",monospace;font-size:18px;letter-spacing:.04em;word-break:break-all}",
+      ".result-title{margin:0 0 12px;color:#146c2e;font-size:16px}",
       "dl{margin:0}",
-      "dt{margin-top:8px;color:var(--text-dim);font-size:12px}",
+      "dt{margin-top:8px;color:var(--muted);font-size:12px}",
       "dd{margin:4px 0 0;font-size:14px}",
+      ".print-card{margin-top:16px;padding:18px;background:#fff;border:1px solid #222;color:#111}",
+      ".print-card .print-logo{width:72px;height:auto;display:block;margin:0 auto 8px}",
+      ".print-card h3{margin:0;text-align:center;font-size:16px}",
+      ".print-kicker{margin:4px 0 12px;text-align:center;font-size:12px;letter-spacing:.08em}",
+      ".print-name{margin:0 0 12px;text-align:center;font-size:15px;font-weight:700}",
+      ".print-code{margin:0 0 14px;text-align:center;font-size:20px;letter-spacing:.06em;font-family:Consolas,\"Courier New\",monospace;word-break:break-all}",
+      ".print-howto{margin:0 0 10px;font-size:12px;line-height:1.6}",
+      ".print-url{margin:0 0 8px;font-size:12px;word-break:break-all}",
+      ".print-company{margin:0;font-size:11px;line-height:1.5}",
+      ".print-qr{width:84px;height:84px;margin:8px auto 0}",
+      ".print-qr svg{width:100%;height:100%}",
+      "@media (max-width:900px){.home-grid{grid-template-columns:1fr}header{padding:12px 16px}}",
+      "@page{size:105mm 148mm;margin:8mm}",
+      "@media print{body{background:#fff;color:#111}.no-print{display:none!important}header,.home-intro,.home-flow,#issue-form,.result-actions,.status{display:none!important}main{width:auto;margin:0;padding:0}#result-view,.panel{display:block!important;border:0;padding:0;background:#fff;box-shadow:none}#print-card{display:block!important;width:89mm;min-height:132mm;margin:0;page-break-inside:avoid}}",
       "</style>",
       "</head>",
       "<body>",
-      "<header><div><h1>OWL JS Studio</h1><p class=\"sub\">面接官向け 発行コード管理</p></div></header>",
+      "<header class=\"no-print\">",
+      "<img class=\"header-logo\" src=\"" + logoSrc + "\" alt=\"OWL Technology\">",
+      "<div><h1>OWL JS Studio</h1><p class=\"sub\">面接官向け 発行コード管理</p></div>",
+      "</header>",
       "<main>",
+      "<div class=\"home-grid\">",
+      "<section class=\"panel home-intro no-print\">",
+      "<h2>プログラミング学習特典</h2>",
+      "<p>OWL JS Studio は、応募者がブラウザ上で JavaScript を学び、自分の3択クイズを完成させる学習特典です。</p>",
+      "<p>完成したクイズは、登録メールアドレスへ HTML ファイルとして届きます。</p>",
+      "</section>",
+      "<section class=\"panel\">",
       "<form id=\"issue-form\" novalidate>",
+      "<h2>特典コード発行</h2>",
       "<label for=\"applicant-name\">応募者氏名</label>",
       "<input id=\"applicant-name\" name=\"applicantName\" type=\"text\" maxlength=\"120\" autocomplete=\"name\" required>",
       "<label for=\"applicant-email\">メールアドレス</label>",
@@ -272,17 +338,41 @@ var OwlJsAdminIssuance = (function (root) {
       "<button id=\"submit-button\" class=\"main-button\" type=\"submit\">発行コードを生成する</button>",
       "</form>",
       "<section id=\"result-view\" class=\"hidden\">",
-      "<p class=\"result-title\">発行コードを作成しました</p>",
-      "<dl>",
+      "<p class=\"result-title no-print\">発行コードを作成しました</p>",
+      "<dl class=\"no-print\">",
       "<dt>応募者氏名</dt><dd id=\"result-name\"></dd>",
       "<dt>登録メールアドレス</dt><dd id=\"result-email\"></dd>",
       "<dt>発行コード</dt>",
       "</dl>",
-      "<p id=\"result-code\" class=\"code-value\"></p>",
+      "<p id=\"result-code\" class=\"code-value no-print\"></p>",
+      "<article id=\"print-card\" class=\"print-card\">",
+      "<img class=\"print-logo\" src=\"" + logoSrc + "\" alt=\"OWL Technology\">",
+      "<h3>OWL JS Studio</h3>",
+      "<p class=\"print-kicker\">プログラミング学習 特典コード</p>",
+      "<p id=\"print-name\" class=\"print-name\"></p>",
+      "<p id=\"print-code\" class=\"print-code\"></p>",
+      "<p class=\"print-howto\">ご利用方法：下の URL から OWL JS Studio を開き、STEP 1〜5 を進めたあと、CLEAR からこのコードを入力してください。完成したクイズは登録メールへ HTML ファイルで届きます。</p>",
+      "<p class=\"print-url\">" + studioUrl + "</p>",
+      qrMarkup ? "<div class=\"print-qr\">" + qrMarkup + "</div>" : "",
+      "<p class=\"print-company\">株式会社アウルテクノロジー<br>https://owl-tec.co.jp/</p>",
+      "</article>",
+      "<div class=\"result-actions no-print\">",
       "<button id=\"copy-button\" class=\"main-button\" type=\"button\">コードをコピー</button>",
+      "<button id=\"print-button\" class=\"sub-button\" type=\"button\">特典カードを印刷</button>",
       "<button id=\"continue-button\" class=\"sub-button\" type=\"button\">続けて発行する</button>",
       "<p id=\"copy-status\" class=\"status\" aria-live=\"polite\"></p>",
+      "</div>",
       "</section>",
+      "</section>",
+      "<section class=\"panel home-flow no-print\">",
+      "<h2>利用の流れ</h2>",
+      "<ol>",
+      "<li>面接官が特典コードを発行し、必要なら印刷して手渡します。</li>",
+      "<li>応募者が OWL JS Studio で学習し、自分のクイズを完成させます。</li>",
+      "<li>完成したクイズが、登録メールアドレスへ届きます。</li>",
+      "</ol>",
+      "</section>",
+      "</div>",
       "</main>",
       "<script>",
       "(function(){",
@@ -325,6 +415,9 @@ var OwlJsAdminIssuance = (function (root) {
       "}else{fallbackCopy();}",
       "function fallbackCopy(){var area=document.createElement('textarea');area.value=code;document.body.appendChild(area);area.select();try{document.execCommand('copy');document.getElementById('copy-status').textContent='コピーしました。';}catch(error){document.getElementById('copy-status').textContent='コピーできませんでした。手動でコピーしてください。';}document.body.removeChild(area);}",
       "});",
+      "document.getElementById('print-button').addEventListener('click',function(){",
+      "window.print();",
+      "});",
       "document.getElementById('continue-button').addEventListener('click',function(){",
       "resultView.classList.add('hidden');",
       "form.classList.remove('hidden');",
@@ -345,6 +438,8 @@ var OwlJsAdminIssuance = (function (root) {
       "document.getElementById('result-name').textContent=result.applicantName||'';",
       "document.getElementById('result-email').textContent=result.email||'';",
       "document.getElementById('result-code').textContent=result.code;",
+      "document.getElementById('print-name').textContent=(result.applicantName||'')+' 様';",
+      "document.getElementById('print-code').textContent=result.code;",
       "form.classList.add('hidden');",
       "resultView.classList.remove('hidden');",
       "document.getElementById('copy-status').textContent='';",

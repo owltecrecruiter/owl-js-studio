@@ -820,13 +820,15 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     function saveAndMail(message) {
       var folderId = config.get("DELIVERY_FOLDER_ID");
       var folder = folderId ? DriveApp.getFolderById(folderId) : DriveApp.getRootFolder();
-      var blob = Utilities.newBlob(message.html, "text/html", message.workId + ".html");
+      var fileName = String(message.workId || "quiz") + ".html";
+      var blob = Utilities.newBlob(message.html, "text/html", fileName);
       var file = folder.createFile(blob);
       return mailExisting({
         email: message.email,
         workId: message.workId,
         fileId: file.getId(),
-        requestId: message.requestId
+        requestId: message.requestId,
+        html: message.html
       });
     }
 
@@ -840,13 +842,35 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
         };
       }
       var file = DriveApp.getFileById(message.fileId);
-      var subject = "JavaScript学習プラットフォーム 発行作品";
-      var body = "発行作品をDriveに保存しました。\n\n" +
-        "ファイル名: " + file.getName() + "\n" +
-        "Drive上で権限を確認してから共有してください。\n\n" +
-        "workId: " + message.workId;
+      var attachment;
       try {
-        MailApp.sendEmail(message.email, subject, body);
+        attachment = file.getBlob();
+        attachment.setName(String(message.workId || file.getName() || "quiz") + ".html");
+      } catch (error) {
+        return {
+          ok: false,
+          reference: "mail:failed:" + message.requestId,
+          fileId: message.fileId,
+          errorMessage: error && error.message ? error.message : "attachment read failed"
+        };
+      }
+      if (!isAttachmentSizeAllowed(attachment)) {
+        return {
+          ok: false,
+          reference: "mail:failed:" + message.requestId,
+          fileId: message.fileId,
+          errorMessage: "HTML attachment exceeds the mail size limit"
+        };
+      }
+      try {
+        MailApp.sendEmail({
+          to: message.email,
+          subject: COMPLETED_QUIZ_MAIL_SUBJECT,
+          body: buildCompletedQuizMailBody({
+            fileName: attachment.getName()
+          }),
+          attachments: [attachment]
+        });
       } catch (error) {
         return {
           ok: false,
@@ -860,6 +884,38 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
         reference: "mail:" + message.requestId,
         fileId: message.fileId
       };
+    }
+  }
+
+  var COMPLETED_QUIZ_MAIL_SUBJECT = "【OWL JS Studio】完成したクイズをお届けします";
+  var MAIL_ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024;
+
+  function buildCompletedQuizMailBody(details) {
+    var fileName = details && details.fileName ? String(details.fileName) : "quiz.html";
+    return [
+      "OWL JS Studioの学習、お疲れさまでした。",
+      "",
+      "全STEPをクリアし、オリジナルの3択クイズが完成しました。",
+      "完成したクイズを、HTMLファイル（" + fileName + "）としてこのメールに添付しています。",
+      "",
+      "【添付ファイルの開き方】",
+      "1. 添付された .html ファイルを保存します。",
+      "2. 保存したファイルをブラウザで開きます。",
+      "3. インターネット接続がなくても、そのファイルだけでクイズを遊べます。",
+      "",
+      "株式会社アウルテクノロジー",
+      "公式ホームページ: https://owl-tec.co.jp/"
+    ].join("\n");
+  }
+
+  function isAttachmentSizeAllowed(blob) {
+    if (!blob || typeof blob.getBytes !== "function") {
+      return true;
+    }
+    try {
+      return blob.getBytes().length <= MAIL_ATTACHMENT_MAX_BYTES;
+    } catch (error) {
+      return true;
     }
   }
 
@@ -1402,42 +1458,285 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
       .replace(/\"/g, "&quot;");
   }
 
+  function getEmbeddedLogoSrc() {
+    var uri = "";
+    try {
+      if (typeof globalThis !== "undefined" && globalThis && globalThis.OWL_JS_STUDIO_LOGO_DATA_URI) {
+        uri = String(globalThis.OWL_JS_STUDIO_LOGO_DATA_URI);
+      }
+    } catch (error) {
+      uri = "";
+    }
+    if (uri.indexOf("data:image/") === 0) {
+      return uri;
+    }
+    return "";
+  }
+
   function createTrustedStandaloneQuizHtml(input) {
     var work = validateQuizData((input || {}).quizData);
-    var ref = sanitizeReference((input || {}).issuanceReference || {});
     if (!/^#[0-9a-f]{6}$/.test(work.backgroundColor) || !/^#[0-9a-f]{6}$/.test(work.textColor)) {
       throwQuizError("色の値が安全ではありません。");
     }
-    return "<!DOCTYPE html>\n" +
-      "<html lang=\"ja\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>" + escapeHtmlText("発行作品 - " + work.gameTitle) + "</title>" +
-      "<style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:'Yu Gothic','Meiryo',sans-serif;background:#d9e2ec;color:#1f2937}main.quiz-surface{width:min(92vw,520px)}.quiz-surface{width:100%;max-width:480px;font-family:'Yu Gothic','Meiryo',sans-serif}.quiz-surface .screen{padding:20px 18px 16px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14),inset 0 0 0 1px rgba(15,23,42,.18)}.quiz-surface .title-screen{text-align:center}.quiz-surface .kicker{margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:.14em;opacity:.72}.quiz-surface .game-title{margin:0 0 10px;font-size:26px;line-height:1.35;font-weight:700}.quiz-surface .quiz-total{margin:0 0 18px;font-size:13px;font-weight:700}.quiz-surface .question-number{display:inline-block;margin:0 0 8px;padding:3px 8px;font-size:12px;font-weight:700;letter-spacing:.06em;border:1px solid currentColor}.quiz-surface .question-meter{position:relative;height:4px;margin:0 0 14px;overflow:hidden}.quiz-surface .question-meter::before{content:\"\";position:absolute;inset:0;background:currentColor;opacity:.18}.quiz-surface .question-meter-fill{position:relative;display:block;height:100%;width:0;background:currentColor;opacity:.55}.quiz-surface .question-text,.quiz-surface .result-heading{margin:0 0 14px;font-size:18px;line-height:1.5;font-weight:700}.quiz-surface .choices{display:grid;gap:8px;margin-bottom:12px}.quiz-surface button{font-family:inherit;font-weight:700;cursor:pointer}.quiz-surface .choice-button,.quiz-surface .main-button{width:100%;color:inherit;background:transparent;border:1px solid currentColor}.quiz-surface .choice-button{padding:11px 12px;font-size:14px;text-align:left}.quiz-surface .choice-button:disabled{cursor:not-allowed;opacity:.72}.quiz-surface .choice-button.selected{outline:2px solid currentColor}.quiz-surface .main-button{padding:12px 14px;font-size:15px}.quiz-surface .start-button{padding:14px 16px;font-size:16px;letter-spacing:.08em;border-width:2px}.quiz-surface .answer-message{min-height:24px;margin:0 0 12px;font-size:15px;font-weight:700}.quiz-surface .correct{color:#14843c}.quiz-surface .incorrect{color:#c0342b}.quiz-surface .score-label{margin:0 0 4px;font-size:12px;font-weight:700;letter-spacing:.1em;opacity:.72}.quiz-surface .score-text{margin:0 0 10px;font-size:32px;font-weight:700;line-height:1.15}.quiz-surface .result-message{margin:0 0 16px;font-size:14px;line-height:1.6}.quiz-surface .result-actions{display:grid;gap:8px}.quiz-surface .work-reference,.quiz-surface .ref{margin:16px 0 0;font-size:12px;word-break:break-all;opacity:.8}.quiz-surface .maker-credit{margin:16px 0 0;font-size:12px;line-height:1.45;opacity:.78}.quiz-surface .maker-credit-powered{display:block;font-size:10px;letter-spacing:.08em;opacity:.82}.quiz-surface .maker-credit a{color:inherit;text-decoration:none;font-weight:600}.quiz-surface .hidden{display:none}</style></head><body><main class=\"quiz-surface\">" +
-      "<section id=\"title-screen\" class=\"screen title-screen\"><p class=\"kicker\">3択クイズ</p><h1 id=\"game-title\" class=\"game-title\"></h1><p id=\"quiz-total\" class=\"quiz-total\">全3問</p><button id=\"start-button\" class=\"main-button start-button\" type=\"button\">はじめる</button><p class=\"maker-credit\"><span class=\"maker-credit-powered\">Powered by</span><a href=\"https://owl-tec.co.jp/\" target=\"_blank\" rel=\"noopener noreferrer\">OWL Technology</a></p></section>" +
-      "<section id=\"quiz-screen\" class=\"screen quiz-screen hidden\"><p id=\"number\" class=\"question-number\"></p><div class=\"question-meter\" aria-hidden=\"true\"><span id=\"meter\" class=\"question-meter-fill\"></span></div><h2 id=\"question\" class=\"question-text\"></h2><div class=\"choices\"><button id=\"choice-0\" class=\"choice-button\" type=\"button\"></button><button id=\"choice-1\" class=\"choice-button\" type=\"button\"></button><button id=\"choice-2\" class=\"choice-button\" type=\"button\"></button></div><p id=\"message\" class=\"answer-message\" aria-live=\"polite\"></p><button id=\"next\" class=\"main-button hidden\" type=\"button\">次の問題へ</button></section>" +
-      "<section id=\"result-screen\" class=\"screen result-screen hidden\"><p class=\"kicker\">結果発表</p><h2 class=\"result-heading\">クイズ終了</h2><p class=\"score-label\">正解数</p><p id=\"score\" class=\"score-text\"></p><p id=\"result-message\" class=\"result-message\"></p><div class=\"result-actions\"><button id=\"retry\" class=\"main-button\" type=\"button\">もう一度挑戦する</button><button id=\"back-to-title\" class=\"main-button\" type=\"button\">タイトルへ戻る</button></div></section>" +
-      "<p class=\"work-reference ref\" id=\"ref\"></p></main>" +
-      "<script>\n" +
-      "const work=" + safeSerializeForInlineScript(work) + ";\n" +
-      "const issuanceReference=" + safeSerializeForInlineScript(ref) + ";\n" +
-      "const quizData=work.questions;\n" +
-      "let current=0,score=0,answered=false;\n" +
-      "const titleScreen=document.getElementById('title-screen'),quizScreen=document.getElementById('quiz-screen'),resultScreen=document.getElementById('result-screen'),gameTitle=document.getElementById('game-title'),number=document.getElementById('number'),question=document.getElementById('question'),message=document.getElementById('message'),next=document.getElementById('next'),scoreEl=document.getElementById('score'),resultMessage=document.getElementById('result-message'),meter=document.getElementById('meter');\n" +
-      "const choiceButtons=[document.getElementById('choice-0'),document.getElementById('choice-1'),document.getElementById('choice-2')];\n" +
-      "function applyTheme(node){node.style.backgroundColor=work.backgroundColor;node.style.color=work.textColor;}\n" +
-      "function showOnly(target){titleScreen.classList.toggle('hidden',target!==titleScreen);quizScreen.classList.toggle('hidden',target!==quizScreen);resultScreen.classList.toggle('hidden',target!==resultScreen);}\n" +
-      "function showTitle(){current=0;score=0;answered=false;gameTitle.textContent=work.gameTitle;showOnly(titleScreen);}\n" +
-      "function startQuiz(){current=0;score=0;show();}\n" +
-      "function show(){const q=quizData[current];answered=false;showOnly(quizScreen);number.textContent='第'+(current+1)+'問 / 全3問';if(meter)meter.style.width=(((current+1)/quizData.length)*100)+'%';question.textContent=q.question;message.textContent='';message.className='answer-message';next.classList.add('hidden');next.textContent=current===quizData.length-1?'結果を見る':'次の問題へ';for(let i=0;i<choiceButtons.length;i++){choiceButtons[i].textContent=q.choices[i];choiceButtons[i].disabled=false;choiceButtons[i].classList.remove('selected');}}\n" +
-      "function answer(i){if(answered)return;answered=true;choiceButtons[i].classList.add('selected');if(i===quizData[current].correctIndex){score++;message.textContent='正解！';message.className='answer-message correct';}else{message.textContent='不正解';message.className='answer-message incorrect';}for(let x=0;x<choiceButtons.length;x++){choiceButtons[x].disabled=true;}next.classList.remove('hidden');}\n" +
-      "function finish(){showOnly(resultScreen);scoreEl.textContent=score+' / '+quizData.length;resultMessage.textContent=score===quizData.length?'全問正解です。すばらしい！':(score>=2?'よくできました。もう一度挑戦して満点を目指しましょう。':'もう一度チャレンジして、JavaScriptに慣れていきましょう。');}\n" +
-      "applyTheme(titleScreen);applyTheme(quizScreen);applyTheme(resultScreen);\n" +
-      "document.getElementById('start-button').onclick=startQuiz;\n" +
-      "choiceButtons[0].onclick=function(){answer(0);};choiceButtons[1].onclick=function(){answer(1);};choiceButtons[2].onclick=function(){answer(2);};\n" +
-      "next.onclick=function(){current++; current<quizData.length?show():finish();};\n" +
-      "document.getElementById('retry').onclick=startQuiz;\n" +
-      "document.getElementById('back-to-title').onclick=showTitle;\n" +
-      "document.getElementById('ref').textContent=issuanceReference.workId?'発行ID: '+issuanceReference.workId:'';\n" +
-      "showTitle();\n" +
-      "</script></body></html>";
+    var logoSrc = getEmbeddedLogoSrc();
+    var logoHtml = logoSrc
+      ? "      <img class=\"studio-logo\" src=\"" + escapeHtmlText(logoSrc) + "\" alt=\"OWL Technology\">\n"
+      : "";
+    var serializedWork = indentMultiline(safeSerializeForInlineScript(work, true), 4);
+    return [
+      "<!DOCTYPE html>",
+      "<html lang=\"ja\">",
+      "<head>",
+      "  <meta charset=\"UTF-8\">",
+      "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">",
+      "  <title>" + escapeHtmlText("発行作品 - " + work.gameTitle) + "</title>",
+      "  <!-- 画面デザイン -->",
+      "  <style>",
+      "    * { box-sizing: border-box; }",
+      "    body {",
+      "      margin: 0;",
+      "      min-height: 100vh;",
+      "      display: grid;",
+      "      place-items: center;",
+      "      font-family: 'Yu Gothic', 'Meiryo', sans-serif;",
+      "      background: #d9e2ec;",
+      "      color: #1f2937;",
+      "    }",
+      "    main.quiz-surface { width: min(92vw, 520px); }",
+      "    .quiz-surface { width: 100%; max-width: 480px; font-family: 'Yu Gothic', 'Meiryo', sans-serif; }",
+      "    .quiz-surface .screen { padding: 20px 18px 16px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(15, 23, 42, 0.18); }",
+      "    .quiz-surface .title-screen { text-align: center; }",
+      "    .quiz-surface .kicker { margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; opacity: 0.72; }",
+      "    .quiz-surface .game-title { margin: 0 0 10px; font-size: 26px; line-height: 1.35; font-weight: 700; }",
+      "    .quiz-surface .quiz-total { margin: 0 0 18px; font-size: 13px; font-weight: 700; }",
+      "    .quiz-surface .question-number { display: inline-block; margin: 0 0 8px; padding: 3px 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; border: 1px solid currentColor; }",
+      "    .quiz-surface .question-meter { position: relative; height: 4px; margin: 0 0 14px; overflow: hidden; }",
+      "    .quiz-surface .question-meter::before { content: \"\"; position: absolute; inset: 0; background: currentColor; opacity: 0.18; }",
+      "    .quiz-surface .question-meter-fill { position: relative; display: block; height: 100%; width: 0; background: currentColor; opacity: 0.55; }",
+      "    .quiz-surface .question-text,",
+      "    .quiz-surface .result-heading { margin: 0 0 14px; font-size: 18px; line-height: 1.5; font-weight: 700; }",
+      "    .quiz-surface .choices { display: grid; gap: 8px; margin-bottom: 12px; }",
+      "    .quiz-surface button { font-family: inherit; font-weight: 700; cursor: pointer; }",
+      "    .quiz-surface .choice-button,",
+      "    .quiz-surface .main-button { width: 100%; color: inherit; background: transparent; border: 1px solid currentColor; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55), 0 0 0 2px rgba(15, 23, 42, 0.28); }",
+      "    .quiz-surface .choice-button { padding: 11px 12px; font-size: 14px; text-align: left; }",
+      "    .quiz-surface .choice-button:disabled { cursor: not-allowed; opacity: 0.72; }",
+      "    .quiz-surface .choice-button.selected { outline: 2px solid currentColor; }",
+      "    .quiz-surface .main-button { padding: 12px 14px; font-size: 15px; }",
+      "    .quiz-surface .start-button { padding: 14px 16px; font-size: 16px; letter-spacing: 0.08em; border-width: 2px; }",
+      "    .quiz-surface .answer-message { min-height: 24px; margin: 0 0 12px; font-size: 15px; font-weight: 700; }",
+      "    .quiz-surface .correct { color: #14843c; }",
+      "    .quiz-surface .incorrect { color: #c0342b; }",
+      "    .quiz-surface .score-label { margin: 0 0 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; opacity: 0.72; }",
+      "    .quiz-surface .score-text { margin: 0 0 10px; font-size: 32px; font-weight: 700; line-height: 1.15; }",
+      "    .quiz-surface .result-message { margin: 0 0 16px; font-size: 14px; line-height: 1.6; }",
+      "    .quiz-surface .result-actions { display: grid; gap: 8px; }",
+      "    .quiz-surface .maker-credit { margin: 16px 0 0; font-size: 12px; line-height: 1.45; opacity: 0.78; }",
+      "    .quiz-surface .maker-credit-powered { display: block; font-size: 10px; letter-spacing: 0.08em; opacity: 0.82; }",
+      "    .quiz-surface .company-legal { display: block; margin-top: 4px; }",
+      "    .quiz-surface .maker-credit a { color: inherit; text-decoration: none; font-weight: 600; }",
+      "    .quiz-surface .studio-logo { display: block; width: min(168px, 64%); height: auto; margin: 0 auto 10px; }",
+      "    .quiz-surface .studio-product-name { margin: 0 0 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; opacity: 0.8; }",
+      "    .quiz-surface .quiz-brand-mark { margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; opacity: 0.7; }",
+      "    .quiz-surface .result-celebrate { margin: 0 0 10px; font-size: 14px; line-height: 1.6; }",
+      "    .quiz-surface .result-company { margin: 0 0 8px; font-size: 12px; line-height: 1.6; opacity: 0.86; }",
+      "    .quiz-surface .hidden { display: none; }",
+      "  </style>",
+      "</head>",
+      "<body>",
+      "  <main class=\"quiz-surface\">",
+      "    <!-- タイトル画面 -->",
+      "    <section id=\"title-screen\" class=\"screen title-screen\">",
+      logoHtml +
+      "      <p class=\"studio-product-name\">OWL JS Studio</p>",
+      "      <p class=\"kicker\">3択クイズ</p>",
+      "      <h1 id=\"game-title\" class=\"game-title\"></h1>",
+      "      <p id=\"quiz-total\" class=\"quiz-total\">全3問</p>",
+      "      <button id=\"start-button\" class=\"main-button start-button\" type=\"button\">はじめる</button>",
+      "      <p class=\"maker-credit\">",
+      "        <span class=\"maker-credit-powered\">Powered by OWL Technology</span>",
+      "        <span class=\"company-legal\">株式会社アウルテクノロジー</span>",
+      "        <a href=\"https://owl-tec.co.jp/\" target=\"_blank\" rel=\"noopener noreferrer\">会社ホームページ</a>",
+      "      </p>",
+      "    </section>",
+      "    <!-- クイズ画面 -->",
+      "    <section id=\"quiz-screen\" class=\"screen quiz-screen hidden\">",
+      "      <p class=\"quiz-brand-mark\">OWL JS Studio</p>",
+      "      <p id=\"question-number\" class=\"question-number\"></p>",
+      "      <div class=\"question-meter\" aria-hidden=\"true\"><span id=\"question-meter-fill\" class=\"question-meter-fill\"></span></div>",
+      "      <h2 id=\"question-text\" class=\"question-text\"></h2>",
+      "      <div class=\"choices\">",
+      "        <button id=\"choice-0\" class=\"choice-button\" type=\"button\"></button>",
+      "        <button id=\"choice-1\" class=\"choice-button\" type=\"button\"></button>",
+      "        <button id=\"choice-2\" class=\"choice-button\" type=\"button\"></button>",
+      "      </div>",
+      "      <p id=\"answer-message\" class=\"answer-message\" aria-live=\"polite\"></p>",
+      "      <button id=\"next-button\" class=\"main-button hidden\" type=\"button\">次の問題へ</button>",
+      "    </section>",
+      "    <!-- 結果画面 -->",
+      "    <section id=\"result-screen\" class=\"screen result-screen hidden\">",
+      "      <p class=\"kicker\">結果発表</p>",
+      "      <h2 class=\"result-heading\">クイズ終了</h2>",
+      "      <p class=\"score-label\">正解数</p>",
+      "      <p id=\"score-text\" class=\"score-text\"></p>",
+      "      <p id=\"result-message\" class=\"result-message\"></p>",
+      "      <div class=\"result-actions\">",
+      "        <button id=\"retry-button\" class=\"main-button\" type=\"button\">もう一度挑戦する</button>",
+      "        <button id=\"back-to-title-button\" class=\"main-button\" type=\"button\">タイトルへ戻る</button>",
+      "      </div>",
+      "      <p class=\"result-celebrate\">学習を最後まで進めました。オリジナルクイズの完成、おめでとうございます。</p>",
+      "      <p class=\"result-company\">このクイズは、株式会社アウルテクノロジーのプログラミング学習特典「OWL JS Studio」で作成されました。</p>",
+      "      <p class=\"maker-credit\"><a href=\"https://owl-tec.co.jp/\" target=\"_blank\" rel=\"noopener noreferrer\">株式会社アウルテクノロジー のホームページ</a></p>",
+      "    </section>",
+      "  </main>",
+      "  <script>",
+      "    // ========================================",
+      "    // 学習者が作った問題データ",
+      "    // gameTitle / backgroundColor / textColor / questions を編集できます",
+      "    // questions[].correctIndex は 0 始まりです（0=1番目, 1=2番目, 2=3番目）",
+      "    // ========================================",
+      "    const quizData = " + serializedWork + ";",
+      "",
+      "    // ========================================",
+      "    // ゲームの状態管理",
+      "    // ========================================",
+      "    let currentQuestionIndex = 0;",
+      "    let correctCount = 0;",
+      "    let answered = false;",
+      "",
+      "    const titleScreen = document.getElementById('title-screen');",
+      "    const quizScreen = document.getElementById('quiz-screen');",
+      "    const resultScreen = document.getElementById('result-screen');",
+      "    const gameTitle = document.getElementById('game-title');",
+      "    const questionNumber = document.getElementById('question-number');",
+      "    const questionText = document.getElementById('question-text');",
+      "    const answerMessage = document.getElementById('answer-message');",
+      "    const nextButton = document.getElementById('next-button');",
+      "    const scoreText = document.getElementById('score-text');",
+      "    const resultMessage = document.getElementById('result-message');",
+      "    const startButton = document.getElementById('start-button');",
+      "    const retryButton = document.getElementById('retry-button');",
+      "    const backToTitleButton = document.getElementById('back-to-title-button');",
+      "    const questionMeterFill = document.getElementById('question-meter-fill');",
+      "    const choiceButtons = [",
+      "      document.getElementById('choice-0'),",
+      "      document.getElementById('choice-1'),",
+      "      document.getElementById('choice-2')",
+      "    ];",
+      "",
+      "    // ========================================",
+      "    // 画面表示処理",
+      "    // ========================================",
+      "    function applyTheme(node) {",
+      "      node.style.backgroundColor = quizData.backgroundColor;",
+      "      node.style.color = quizData.textColor;",
+      "    }",
+      "",
+      "    function showOnly(target) {",
+      "      titleScreen.classList.toggle('hidden', target !== titleScreen);",
+      "      quizScreen.classList.toggle('hidden', target !== quizScreen);",
+      "      resultScreen.classList.toggle('hidden', target !== resultScreen);",
+      "    }",
+      "",
+      "    function showTitle() {",
+      "      currentQuestionIndex = 0;",
+      "      correctCount = 0;",
+      "      answered = false;",
+      "      gameTitle.textContent = quizData.gameTitle;",
+      "      showOnly(titleScreen);",
+      "    }",
+      "",
+      "    function startQuiz() {",
+      "      currentQuestionIndex = 0;",
+      "      correctCount = 0;",
+      "      showQuestion();",
+      "    }",
+      "",
+      "    function showQuestion() {",
+      "      const currentQuestion = quizData.questions[currentQuestionIndex];",
+      "      answered = false;",
+      "      showOnly(quizScreen);",
+      "      questionNumber.textContent = '第' + (currentQuestionIndex + 1) + '問 / 全3問';",
+      "      if (questionMeterFill) {",
+      "        questionMeterFill.style.width = (((currentQuestionIndex + 1) / quizData.questions.length) * 100) + '%';",
+      "      }",
+      "      questionText.textContent = currentQuestion.question;",
+      "      answerMessage.textContent = '';",
+      "      answerMessage.className = 'answer-message';",
+      "      nextButton.classList.add('hidden');",
+      "      nextButton.textContent = currentQuestionIndex === quizData.questions.length - 1 ? '結果を見る' : '次の問題へ';",
+      "      for (let i = 0; i < choiceButtons.length; i++) {",
+      "        choiceButtons[i].textContent = currentQuestion.choices[i];",
+      "        choiceButtons[i].disabled = false;",
+      "        choiceButtons[i].classList.remove('selected');",
+      "      }",
+      "    }",
+      "",
+      "    function showResult() {",
+      "      showOnly(resultScreen);",
+      "      scoreText.textContent = correctCount + ' / ' + quizData.questions.length;",
+      "      if (correctCount === quizData.questions.length) {",
+      "        resultMessage.textContent = '全問正解です。すばらしい！';",
+      "      } else if (correctCount >= 2) {",
+      "        resultMessage.textContent = 'よくできました。もう一度挑戦して満点を目指しましょう。';",
+      "      } else {",
+      "        resultMessage.textContent = 'もう一度チャレンジして、JavaScriptに慣れていきましょう。';",
+      "      }",
+      "    }",
+      "",
+      "    // ========================================",
+      "    // 回答判定",
+      "    // ========================================",
+      "    function checkAnswer(selectedIndex) {",
+      "      if (answered) { return; }",
+      "      answered = true;",
+      "      choiceButtons[selectedIndex].classList.add('selected');",
+      "      if (selectedIndex === quizData.questions[currentQuestionIndex].correctIndex) {",
+      "        correctCount = correctCount + 1;",
+      "        answerMessage.textContent = '正解！';",
+      "        answerMessage.classList.add('correct');",
+      "      } else {",
+      "        answerMessage.textContent = '不正解';",
+      "        answerMessage.classList.add('incorrect');",
+      "      }",
+      "      for (let i = 0; i < choiceButtons.length; i++) {",
+      "        choiceButtons[i].disabled = true;",
+      "      }",
+      "      nextButton.classList.remove('hidden');",
+      "    }",
+      "",
+      "    function goToNextQuestion() {",
+      "      currentQuestionIndex = currentQuestionIndex + 1;",
+      "      if (currentQuestionIndex < quizData.questions.length) {",
+      "        showQuestion();",
+      "      } else {",
+      "        showResult();",
+      "      }",
+      "    }",
+      "",
+      "    // ========================================",
+      "    // イベント登録",
+      "    // ========================================",
+      "    applyTheme(titleScreen);",
+      "    applyTheme(quizScreen);",
+      "    applyTheme(resultScreen);",
+      "    startButton.addEventListener('click', startQuiz);",
+      "    choiceButtons[0].addEventListener('click', function () { checkAnswer(0); });",
+      "    choiceButtons[1].addEventListener('click', function () { checkAnswer(1); });",
+      "    choiceButtons[2].addEventListener('click', function () { checkAnswer(2); });",
+      "    nextButton.addEventListener('click', goToNextQuestion);",
+      "    retryButton.addEventListener('click', startQuiz);",
+      "    backToTitleButton.addEventListener('click', showTitle);",
+      "    showTitle();",
+      "  </script>",
+      "</body>",
+      "</html>"
+    ].join("\n");
+  }
+
+  function indentMultiline(text, spaces) {
+    var pad = new Array(spaces + 1).join(" ");
+    return String(text).split("\n").join("\n" + pad);
   }
 
 
@@ -1540,8 +1839,9 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     return value !== null && typeof value === "object" && !Array.isArray(value);
   }
 
-  function safeSerializeForInlineScript(value) {
-    return stringifyJson(value)
+  function safeSerializeForInlineScript(value, pretty) {
+    var json = pretty === true ? JSON.stringify(value, null, 2) : stringifyJson(value);
+    return json
       .replace(/</g, "\\u003C")
       .replace(/>/g, "\\u003E")
       .replace(/&/g, "\\u0026")
@@ -1620,6 +1920,8 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     createGasAttemptLimiter: createGasAttemptLimiter,
     validateQuizData: validateQuizData,
     createTrustedStandaloneQuizHtml: createTrustedStandaloneQuizHtml,
+    COMPLETED_QUIZ_MAIL_SUBJECT: COMPLETED_QUIZ_MAIL_SUBJECT,
+    buildCompletedQuizMailBody: buildCompletedQuizMailBody,
     createLearnerBridgeHtml: createLearnerBridgeHtml,
     extractBridgeSession: extractBridgeSession,
     sanitizeBridgeSession: sanitizeBridgeSession,

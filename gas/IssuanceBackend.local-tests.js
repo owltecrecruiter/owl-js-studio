@@ -17,6 +17,9 @@ const {
   createSpreadsheetStorage,
   createLearnerBridgeHtml,
   createTrustedStandaloneQuizHtml,
+  createGasDriveMailDelivery,
+  COMPLETED_QUIZ_MAIL_SUBJECT,
+  buildCompletedQuizMailBody,
   extractBridgeSession,
   sanitizeBridgeSession,
   readBridgeSessionFromQueryString,
@@ -329,6 +332,14 @@ test("valid quiz data generates standalone HTML", function () {
   assert.strictEqual(html.indexOf("制作ツール提供："), -1);
   assert.ok(html.includes("https://owl-tec.co.jp/"));
   assert.ok(html.includes("rel=\"noopener noreferrer\""));
+  assert.ok(html.indexOf("株式会社アウルテクノロジー") !== -1);
+  assert.ok(html.indexOf("学習者が作った問題データ") !== -1);
+  assert.ok(html.indexOf("const quizData") !== -1);
+  assert.ok(html.indexOf("if (answered)") !== -1);
+  assert.strictEqual(html.indexOf("issuanceReference"), -1);
+  assert.strictEqual(html.indexOf("code-local"), -1);
+  assert.strictEqual(html.indexOf("applicant-local"), -1);
+  assert.strictEqual(html.indexOf("req-local"), -1);
 });
 
 test("special characters are escaped in generated HTML and bridge origin is fixed", function () {
@@ -506,6 +517,91 @@ test("bridge handler preserves learner issuance path server-side", function () {
 
   assert.strictEqual(issued.ok, true);
   assert.strictEqual(issued.deliveryStatus, DELIVERY_STATUS.SENT);
+});
+
+test("completed quiz mail copy describes HTML attachment", function () {
+  const body = buildCompletedQuizMailBody({ fileName: "work_local.html" });
+  assert.strictEqual(COMPLETED_QUIZ_MAIL_SUBJECT, "【OWL JS Studio】完成したクイズをお届けします");
+  assert.ok(body.indexOf("work_local.html") !== -1);
+  assert.ok(body.indexOf("HTMLファイル") !== -1);
+  assert.ok(body.indexOf("https://owl-tec.co.jp/") !== -1);
+  assert.ok(body.indexOf("株式会社アウルテクノロジー") !== -1);
+});
+
+test("Drive mail delivery attaches HTML after saving to Drive", function () {
+  const previous = {
+    DriveApp: global.DriveApp,
+    Utilities: global.Utilities,
+    MailApp: global.MailApp,
+    PropertiesService: global.PropertiesService
+  };
+  const sent = [];
+  const files = {};
+  global.PropertiesService = {
+    getScriptProperties: function () {
+      return {
+        getProperty: function () {
+          return "";
+        }
+      };
+    }
+  };
+  global.Utilities = {
+    newBlob: function (html, type, name) {
+      return { html: html, type: type, name: name };
+    }
+  };
+  global.DriveApp = {
+    getRootFolder: function () {
+      return {
+        createFile: function (blob) {
+          const id = "file-1";
+          files[id] = {
+            getId: function () { return id; },
+            getName: function () { return blob.name; },
+            getBlob: function () {
+              return {
+                name: blob.name,
+                getName: function () { return this.name; },
+                setName: function (next) { this.name = next; return this; },
+                getBytes: function () { return Buffer.from(String(blob.html), "utf8"); }
+              };
+            }
+          };
+          return files[id];
+        }
+      };
+    },
+    getFileById: function (id) {
+      return files[id];
+    }
+  };
+  global.MailApp = {
+    sendEmail: function (options) {
+      sent.push(options);
+    }
+  };
+  try {
+    const delivery = createGasDriveMailDelivery();
+    const result = delivery.deliver({
+      email: "learner@example.com",
+      workId: "work_local_html",
+      requestId: "req-mail-attach",
+      html: "<!DOCTYPE html><html lang=\"ja\"><body>quiz</body></html>"
+    });
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(sent.length, 1);
+    assert.strictEqual(sent[0].to, "learner@example.com");
+    assert.strictEqual(sent[0].subject, COMPLETED_QUIZ_MAIL_SUBJECT);
+    assert.ok(sent[0].body.indexOf("HTMLファイル") !== -1);
+    assert.strictEqual(sent[0].attachments.length, 1);
+    assert.ok(String(sent[0].attachments[0].getName()).indexOf(".html") !== -1);
+  } finally {
+    global.DriveApp = previous.DriveApp;
+    global.Utilities = previous.Utilities;
+    global.MailApp = previous.MailApp;
+    global.PropertiesService = previous.PropertiesService;
+  }
 });
 
 test("mail send success marks delivery sent", function () {

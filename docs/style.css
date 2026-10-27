@@ -834,7 +834,7 @@ button {
 .quiz-surface .question-text, .quiz-surface .result-heading { margin: 0 0 14px; font-size: 18px; line-height: 1.5; font-weight: 700; }
 .quiz-surface .choices { display: grid; gap: 8px; margin-bottom: 12px; }
 .quiz-surface button { font-family: inherit; font-weight: 700; cursor: pointer; }
-.quiz-surface .choice-button, .quiz-surface .main-button { width: 100%; color: inherit; background: transparent; border: 1px solid currentColor; }
+.quiz-surface .choice-button, .quiz-surface .main-button { width: 100%; color: inherit; background: transparent; border: 1px solid currentColor; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55), 0 0 0 2px rgba(15, 23, 42, 0.28); }
 .quiz-surface .choice-button { padding: 11px 12px; font-size: 14px; text-align: left; }
 .quiz-surface .choice-button:hover:not(:disabled) { opacity: 0.88; }
 .quiz-surface .choice-button:disabled { cursor: not-allowed; opacity: 0.55; }
@@ -852,9 +852,15 @@ button {
 .quiz-surface .work-reference { margin: 16px 0 0; font-size: 12px; word-break: break-all; opacity: 0.8; }
 .quiz-surface .maker-credit { margin: 16px 0 0; font-size: 12px; font-weight: 400; line-height: 1.45; opacity: 0.78; }
 .quiz-surface .maker-credit-powered { display: block; font-size: 10px; letter-spacing: 0.08em; opacity: 0.82; }
+.quiz-surface .company-legal { display: block; margin-top: 4px; }
 .quiz-surface .maker-credit a { color: inherit; text-decoration: none; font-weight: 600; }
 .quiz-surface .maker-credit a:hover { text-decoration: underline; }
 .quiz-surface .maker-credit a:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.quiz-surface .studio-logo { display: block; width: min(168px, 64%); height: auto; margin: 0 auto 10px; }
+.quiz-surface .studio-product-name { margin: 0 0 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; opacity: 0.8; }
+.quiz-surface .quiz-brand-mark { margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; opacity: 0.7; }
+.quiz-surface .result-celebrate { margin: 0 0 10px; font-size: 14px; line-height: 1.6; }
+.quiz-surface .result-company { margin: 0 0 8px; font-size: 12px; line-height: 1.6; opacity: 0.86; }
 .quiz-surface .hidden { display: none; }
 /* @quiz-surface-end */
 
@@ -1051,6 +1057,33 @@ button {
 .step-button.complete:not(.active) {
   color: #b5cea8;
   border-color: #4b7a4b;
+}
+
+.step-clear-button {
+  padding: 5px 10px;
+  color: #9aa8b8;
+  background: #314056;
+  border: 1px solid #3e3e42;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  cursor: default;
+}
+
+.step-clear-button:disabled {
+  opacity: 0.55;
+}
+
+.step-clear-button.ready {
+  color: #ffffff;
+  background: #ff851b;
+  border-color: #ff851b;
+  cursor: pointer;
+}
+
+.step-clear-button.ready:hover {
+  background: #e36b00;
+  border-color: #e36b00;
 }
 
 .step-card {

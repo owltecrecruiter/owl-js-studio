@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.11 / interviewer issuance is a separate GAS admin app (v0.9.12)
+ * OWL JS Studio v0.9.13 / interviewer issuance is a separate GAS admin app
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -21,9 +21,11 @@
   });
 
   var COMPANY_NAME = "アウルテクノロジー";
+  var COMPANY_LEGAL_NAME = "株式会社アウルテクノロジー";
   var COMPANY_URL = "https://owl-tec.co.jp/";
   var MAKER_CREDIT_POWERED = "Powered by";
   var MAKER_CREDIT_BRAND = "OWL Technology";
+  var STUDIO_PRODUCT_NAME = "OWL JS Studio";
 
   var NAMED_COLORS = Object.freeze({
     white: "#ffffff",
@@ -1054,11 +1056,39 @@
     };
   }
 
+  function getEmbeddedLogoSrc() {
+    var uri = "";
+    try {
+      if (typeof globalThis !== "undefined" && globalThis && globalThis.OWL_JS_STUDIO_LOGO_DATA_URI) {
+        uri = String(globalThis.OWL_JS_STUDIO_LOGO_DATA_URI);
+      }
+    } catch (error) {
+      uri = "";
+    }
+    if (uri.indexOf("data:image/") === 0) {
+      return uri;
+    }
+    return "";
+  }
+
+  function createStudioLogoHtml(logoSrc) {
+    if (!logoSrc) {
+      return "";
+    }
+    return "<img class=\"studio-logo\" src=\"" + escapeHtmlText(logoSrc) + "\" alt=\"" + escapeHtmlText(MAKER_CREDIT_BRAND) + "\">";
+  }
+
   function createMakerCreditHtml() {
     return "<p class=\"maker-credit\">" +
-      "<span class=\"maker-credit-powered\">" + escapeHtmlText(MAKER_CREDIT_POWERED) + "</span>" +
-      "<a href=\"" + COMPANY_URL + "\" target=\"_blank\" rel=\"noopener noreferrer\">" +
-      escapeHtmlText(MAKER_CREDIT_BRAND) + "</a></p>";
+      "<span class=\"maker-credit-powered\">" + escapeHtmlText(MAKER_CREDIT_POWERED) + " " + escapeHtmlText(MAKER_CREDIT_BRAND) + "</span>" +
+      "<span class=\"company-legal\">" + escapeHtmlText(COMPANY_LEGAL_NAME) + "</span>" +
+      "<a href=\"" + COMPANY_URL + "\" target=\"_blank\" rel=\"noopener noreferrer\">会社ホームページ</a></p>";
+  }
+
+  function createResultBrandHtml() {
+    return "<p class=\"result-celebrate\">学習を最後まで進めました。オリジナルクイズの完成、おめでとうございます。</p>" +
+      "<p class=\"result-company\">このクイズは、" + escapeHtmlText(COMPANY_LEGAL_NAME) + "のプログラミング学習特典「" + escapeHtmlText(STUDIO_PRODUCT_NAME) + "」で作成されました。</p>" +
+      "<p class=\"maker-credit\"><a href=\"" + COMPANY_URL + "\" target=\"_blank\" rel=\"noopener noreferrer\">" + escapeHtmlText(COMPANY_LEGAL_NAME) + " のホームページ</a></p>";
   }
 
   function getQuizSurfaceCss() {
@@ -1076,7 +1106,7 @@
       ".quiz-surface .question-text, .quiz-surface .result-heading { margin: 0 0 14px; font-size: 18px; line-height: 1.5; font-weight: 700; }",
       ".quiz-surface .choices { display: grid; gap: 8px; margin-bottom: 12px; }",
       ".quiz-surface button { font-family: inherit; font-weight: 700; cursor: pointer; }",
-      ".quiz-surface .choice-button, .quiz-surface .main-button { width: 100%; color: inherit; background: transparent; border: 1px solid currentColor; }",
+      ".quiz-surface .choice-button, .quiz-surface .main-button { width: 100%; color: inherit; background: transparent; border: 1px solid currentColor; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55), 0 0 0 2px rgba(15, 23, 42, 0.28); }",
       ".quiz-surface .choice-button { padding: 11px 12px; font-size: 14px; text-align: left; }",
       ".quiz-surface .choice-button:hover:not(:disabled) { opacity: 0.88; }",
       ".quiz-surface .choice-button:disabled { cursor: not-allowed; opacity: 0.55; }",
@@ -1094,9 +1124,15 @@
       ".quiz-surface .work-reference { margin: 16px 0 0; font-size: 12px; word-break: break-all; opacity: 0.8; }",
       ".quiz-surface .maker-credit { margin: 16px 0 0; font-size: 12px; font-weight: 400; line-height: 1.45; opacity: 0.78; }",
       ".quiz-surface .maker-credit-powered { display: block; font-size: 10px; letter-spacing: 0.08em; opacity: 0.82; }",
+      ".quiz-surface .company-legal { display: block; margin-top: 4px; }",
       ".quiz-surface .maker-credit a { color: inherit; text-decoration: none; font-weight: 600; }",
       ".quiz-surface .maker-credit a:hover { text-decoration: underline; }",
       ".quiz-surface .maker-credit a:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }",
+      ".quiz-surface .studio-logo { display: block; width: min(168px, 64%); height: auto; margin: 0 auto 10px; }",
+      ".quiz-surface .studio-product-name { margin: 0 0 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; opacity: 0.8; }",
+      ".quiz-surface .quiz-brand-mark { margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; opacity: 0.7; }",
+      ".quiz-surface .result-celebrate { margin: 0 0 10px; font-size: 14px; line-height: 1.6; }",
+      ".quiz-surface .result-company { margin: 0 0 8px; font-size: 12px; line-height: 1.6; opacity: 0.86; }",
       ".quiz-surface .hidden { display: none; }"
     ].join("\n");
   }
@@ -1114,15 +1150,21 @@
     var titleHeading = config.titleHeading || "h1";
     var questionHeading = config.questionHeading || "h2";
     var resultHeading = config.resultHeading || "h2";
-    var includeReference = config.includeReference === true;
-    return "    <section id=\"title-screen\" class=\"screen title-screen\">\n" +
+    var logoSrc = config.logoSrc || "";
+    var logoHtml = createStudioLogoHtml(logoSrc);
+    return "    <!-- タイトル画面 -->\n" +
+      "    <section id=\"title-screen\" class=\"screen title-screen\">\n" +
+      (logoHtml ? "      " + logoHtml + "\n" : "") +
+      "      <p class=\"studio-product-name\">" + escapeHtmlText(STUDIO_PRODUCT_NAME) + "</p>\n" +
       "      <p class=\"kicker\">3択クイズ</p>\n" +
       "      <" + titleHeading + " id=\"game-title\" class=\"game-title\"></" + titleHeading + ">\n" +
       "      <p id=\"quiz-total\" class=\"quiz-total\">全3問</p>\n" +
       "      <button id=\"start-button\" class=\"main-button start-button\" type=\"button\">はじめる</button>\n" +
       "      " + createMakerCreditHtml() + "\n" +
       "    </section>\n" +
+      "    <!-- クイズ画面 -->\n" +
       "    <section id=\"quiz-screen\" class=\"screen quiz-screen hidden\">\n" +
+      "      <p class=\"quiz-brand-mark\">" + escapeHtmlText(STUDIO_PRODUCT_NAME) + "</p>\n" +
       "      <p id=\"question-number\" class=\"question-number\"></p>\n" +
       "      <div class=\"question-meter\" aria-hidden=\"true\"><span id=\"question-meter-fill\" class=\"question-meter-fill\"></span></div>\n" +
       "      <" + questionHeading + " id=\"question-text\" class=\"question-text\"></" + questionHeading + ">\n" +
@@ -1134,6 +1176,7 @@
       "      <p id=\"answer-message\" class=\"answer-message\" aria-live=\"polite\"></p>\n" +
       "      <button id=\"next-button\" class=\"main-button hidden\" type=\"button\">次の問題へ</button>\n" +
       "    </section>\n" +
+      "    <!-- 結果画面 -->\n" +
       "    <section id=\"result-screen\" class=\"screen result-screen hidden\">\n" +
       "      <p class=\"kicker\">結果発表</p>\n" +
       "      <" + resultHeading + " class=\"result-heading\">クイズ終了</" + resultHeading + ">\n" +
@@ -1144,8 +1187,8 @@
       "        <button id=\"retry-button\" class=\"main-button\" type=\"button\">もう一度挑戦する</button>\n" +
       "        <button id=\"back-to-title-button\" class=\"main-button\" type=\"button\">タイトルへ戻る</button>\n" +
       "      </div>\n" +
-      "    </section>\n" +
-      (includeReference ? "    <p id=\"work-reference\" class=\"work-reference\"></p>\n" : "");
+      "      " + createResultBrandHtml() + "\n" +
+      "    </section>\n";
   }
 
   function normalizeColor(value, label) {
@@ -1529,7 +1572,7 @@
       mailSent: status === "sent"
     };
     if (copy.mailSent === true) {
-      copy.body = "完成したクイズの受け取り方法をご確認ください。メールを送信しました。";
+      copy.body = "完成したクイズをHTMLファイルとしてメールに添付しました。受信トレイをご確認ください。";
     } else if (status === "failed") {
       copy.body = "完成したクイズの受け取り方法をご確認ください。配送に失敗したため、管理者に連絡してください。";
     }
@@ -1864,8 +1907,9 @@
     };
   }
 
-  function safeSerializeForInlineScript(value) {
-    return JSON.stringify(value)
+  function safeSerializeForInlineScript(value, pretty) {
+    var json = pretty === true ? JSON.stringify(value, null, 2) : JSON.stringify(value);
+    return json
       .replace(/</g, "\\u003C")
       .replace(/>/g, "\\u003E")
       .replace(/&/g, "\\u0026")
@@ -1873,13 +1917,160 @@
       .replace(/\u2029/g, "\\u2029");
   }
 
+  function indentMultiline(text, spaces) {
+    var pad = new Array(spaces + 1).join(" ");
+    return String(text).split("\n").join("\n" + pad);
+  }
+
+  function getEducationalQuizScript(work) {
+    var serializedWork = indentMultiline(safeSerializeForInlineScript(work, true), 4);
+    return [
+      "    // ========================================",
+      "    // 学習者が作った問題データ",
+      "    // gameTitle / backgroundColor / textColor / questions を編集できます",
+      "    // questions[].correctIndex は 0 始まりです（0=1番目, 1=2番目, 2=3番目）",
+      "    // ========================================",
+      "    const quizData = " + serializedWork + ";",
+      "",
+      "    // ========================================",
+      "    // ゲームの状態管理",
+      "    // ========================================",
+      "    let currentQuestionIndex = 0;",
+      "    let correctCount = 0;",
+      "    let answered = false;",
+      "",
+      "    const titleScreen = document.getElementById('title-screen');",
+      "    const quizScreen = document.getElementById('quiz-screen');",
+      "    const resultScreen = document.getElementById('result-screen');",
+      "    const gameTitle = document.getElementById('game-title');",
+      "    const questionNumber = document.getElementById('question-number');",
+      "    const questionText = document.getElementById('question-text');",
+      "    const answerMessage = document.getElementById('answer-message');",
+      "    const nextButton = document.getElementById('next-button');",
+      "    const scoreText = document.getElementById('score-text');",
+      "    const resultMessage = document.getElementById('result-message');",
+      "    const startButton = document.getElementById('start-button');",
+      "    const retryButton = document.getElementById('retry-button');",
+      "    const backToTitleButton = document.getElementById('back-to-title-button');",
+      "    const questionMeterFill = document.getElementById('question-meter-fill');",
+      "    const choiceButtons = [",
+      "      document.getElementById('choice-0'),",
+      "      document.getElementById('choice-1'),",
+      "      document.getElementById('choice-2')",
+      "    ];",
+      "",
+      "    // ========================================",
+      "    // 画面表示処理",
+      "    // ========================================",
+      "    function applyTheme(node) {",
+      "      node.style.backgroundColor = quizData.backgroundColor;",
+      "      node.style.color = quizData.textColor;",
+      "    }",
+      "",
+      "    function showOnly(target) {",
+      "      titleScreen.classList.toggle('hidden', target !== titleScreen);",
+      "      quizScreen.classList.toggle('hidden', target !== quizScreen);",
+      "      resultScreen.classList.toggle('hidden', target !== resultScreen);",
+      "    }",
+      "",
+      "    function showTitle() {",
+      "      currentQuestionIndex = 0;",
+      "      correctCount = 0;",
+      "      answered = false;",
+      "      gameTitle.textContent = quizData.gameTitle;",
+      "      showOnly(titleScreen);",
+      "    }",
+      "",
+      "    function startQuiz() {",
+      "      currentQuestionIndex = 0;",
+      "      correctCount = 0;",
+      "      showQuestion();",
+      "    }",
+      "",
+      "    function showQuestion() {",
+      "      const currentQuestion = quizData.questions[currentQuestionIndex];",
+      "      answered = false;",
+      "      showOnly(quizScreen);",
+      "      questionNumber.textContent = '第' + (currentQuestionIndex + 1) + '問 / 全3問';",
+      "      if (questionMeterFill) {",
+      "        questionMeterFill.style.width = (((currentQuestionIndex + 1) / quizData.questions.length) * 100) + '%';",
+      "      }",
+      "      questionText.textContent = currentQuestion.question;",
+      "      answerMessage.textContent = '';",
+      "      answerMessage.className = 'answer-message';",
+      "      nextButton.classList.add('hidden');",
+      "      nextButton.textContent = currentQuestionIndex === quizData.questions.length - 1 ? '結果を見る' : '次の問題へ';",
+      "      for (let i = 0; i < choiceButtons.length; i++) {",
+      "        choiceButtons[i].textContent = currentQuestion.choices[i];",
+      "        choiceButtons[i].disabled = false;",
+      "        choiceButtons[i].classList.remove('selected');",
+      "      }",
+      "    }",
+      "",
+      "    function showResult() {",
+      "      showOnly(resultScreen);",
+      "      scoreText.textContent = correctCount + ' / ' + quizData.questions.length;",
+      "      if (correctCount === quizData.questions.length) {",
+      "        resultMessage.textContent = '全問正解です。すばらしい！';",
+      "      } else if (correctCount >= 2) {",
+      "        resultMessage.textContent = 'よくできました。もう一度挑戦して満点を目指しましょう。';",
+      "      } else {",
+      "        resultMessage.textContent = 'もう一度チャレンジして、JavaScriptに慣れていきましょう。';",
+      "      }",
+      "    }",
+      "",
+      "    // ========================================",
+      "    // 回答判定",
+      "    // ========================================",
+      "    function checkAnswer(selectedIndex) {",
+      "      if (answered) { return; }",
+      "      answered = true;",
+      "      choiceButtons[selectedIndex].classList.add('selected');",
+      "      if (selectedIndex === quizData.questions[currentQuestionIndex].correctIndex) {",
+      "        correctCount = correctCount + 1;",
+      "        answerMessage.textContent = '正解！';",
+      "        answerMessage.classList.add('correct');",
+      "      } else {",
+      "        answerMessage.textContent = '不正解';",
+      "        answerMessage.classList.add('incorrect');",
+      "      }",
+      "      for (let i = 0; i < choiceButtons.length; i++) {",
+      "        choiceButtons[i].disabled = true;",
+      "      }",
+      "      nextButton.classList.remove('hidden');",
+      "    }",
+      "",
+      "    function goToNextQuestion() {",
+      "      currentQuestionIndex = currentQuestionIndex + 1;",
+      "      if (currentQuestionIndex < quizData.questions.length) {",
+      "        showQuestion();",
+      "      } else {",
+      "        showResult();",
+      "      }",
+      "    }",
+      "",
+      "    // ========================================",
+      "    // イベント登録",
+      "    // ========================================",
+      "    applyTheme(titleScreen);",
+      "    applyTheme(quizScreen);",
+      "    applyTheme(resultScreen);",
+      "    startButton.addEventListener('click', startQuiz);",
+      "    choiceButtons[0].addEventListener('click', function () { checkAnswer(0); });",
+      "    choiceButtons[1].addEventListener('click', function () { checkAnswer(1); });",
+      "    choiceButtons[2].addEventListener('click', function () { checkAnswer(2); });",
+      "    nextButton.addEventListener('click', goToNextQuestion);",
+      "    retryButton.addEventListener('click', startQuiz);",
+      "    backToTitleButton.addEventListener('click', showTitle);",
+      "    showTitle();"
+    ].join("\n");
+  }
+
   function createStandaloneQuizHtml(workInput, options) {
     var work = validateWorkData(workInput);
     var config = options || {};
-    var issuanceReference = config.issuanceReference || null;
     var pageTitle = config.pageTitle || work.gameTitle;
-    var serializedWork = safeSerializeForInlineScript(work);
-    var serializedReference = issuanceReference ? safeSerializeForInlineScript(issuanceReference) : "null";
+    var logoSrc = config.logoSrc || getEmbeddedLogoSrc();
     var backgroundColor = work.backgroundColor;
     var textColor = work.textColor;
     if (!isSafeCssColor(backgroundColor) || !isSafeCssColor(textColor)) {
@@ -1892,6 +2083,7 @@
       "  <meta charset=\"UTF-8\">\n" +
       "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
       "  <title>" + escapeHtmlText(pageTitle) + "</title>\n" +
+      "  <!-- 画面デザイン -->\n" +
       "  <style>\n" +
       getQuizPageCss() + "\n" +
       getQuizSurfaceCss() + "\n" +
@@ -1899,104 +2091,10 @@
       "</head>\n" +
       "<body>\n" +
       "  <main class=\"quiz-surface\">\n" +
-      getQuizSurfaceMarkup({ includeReference: !!issuanceReference }) +
+      getQuizSurfaceMarkup({ logoSrc: logoSrc }) +
       "  </main>\n" +
       "  <script>\n" +
-      "    const work = " + serializedWork + ";\n" +
-      "    const issuanceReference = " + serializedReference + ";\n" +
-      "    const quizData = work.questions;\n" +
-      "    let currentQuestionIndex = 0;\n" +
-      "    let correctCount = 0;\n" +
-      "    let answered = false;\n" +
-      "    const titleScreen = document.getElementById('title-screen');\n" +
-      "    const quizScreen = document.getElementById('quiz-screen');\n" +
-      "    const resultScreen = document.getElementById('result-screen');\n" +
-      "    const gameTitle = document.getElementById('game-title');\n" +
-      "    const questionNumber = document.getElementById('question-number');\n" +
-      "    const questionText = document.getElementById('question-text');\n" +
-      "    const answerMessage = document.getElementById('answer-message');\n" +
-      "    const nextButton = document.getElementById('next-button');\n" +
-      "    const scoreText = document.getElementById('score-text');\n" +
-      "    const resultMessage = document.getElementById('result-message');\n" +
-      "    const startButton = document.getElementById('start-button');\n" +
-      "    const retryButton = document.getElementById('retry-button');\n" +
-      "    const backToTitleButton = document.getElementById('back-to-title-button');\n" +
-      "    const questionMeterFill = document.getElementById('question-meter-fill');\n" +
-      "    const choiceButtons = [document.getElementById('choice-0'), document.getElementById('choice-1'), document.getElementById('choice-2')];\n" +
-      "    function applyTheme(node) {\n" +
-      "      node.style.backgroundColor = work.backgroundColor;\n" +
-      "      node.style.color = work.textColor;\n" +
-      "    }\n" +
-      "    function showOnly(target) {\n" +
-      "      titleScreen.classList.toggle('hidden', target !== titleScreen);\n" +
-      "      quizScreen.classList.toggle('hidden', target !== quizScreen);\n" +
-      "      resultScreen.classList.toggle('hidden', target !== resultScreen);\n" +
-      "    }\n" +
-      "    function showTitle() {\n" +
-      "      currentQuestionIndex = 0;\n" +
-      "      correctCount = 0;\n" +
-      "      answered = false;\n" +
-      "      gameTitle.textContent = work.gameTitle;\n" +
-      "      showOnly(titleScreen);\n" +
-      "    }\n" +
-      "    function startQuiz() {\n" +
-      "      currentQuestionIndex = 0;\n" +
-      "      correctCount = 0;\n" +
-      "      showQuestion();\n" +
-      "    }\n" +
-      "    function showQuestion() {\n" +
-      "      const quiz = quizData[currentQuestionIndex];\n" +
-      "      answered = false;\n" +
-      "      showOnly(quizScreen);\n" +
-      "      questionNumber.textContent = '第' + (currentQuestionIndex + 1) + '問 / 全3問';\n" +
-      "      if (questionMeterFill) { questionMeterFill.style.width = (((currentQuestionIndex + 1) / quizData.length) * 100) + '%'; }\n" +
-      "      questionText.textContent = quiz.question;\n" +
-      "      answerMessage.textContent = '';\n" +
-      "      answerMessage.className = 'answer-message';\n" +
-      "      nextButton.classList.add('hidden');\n" +
-      "      nextButton.textContent = currentQuestionIndex === quizData.length - 1 ? '結果を見る' : '次の問題へ';\n" +
-      "      for (let i = 0; i < choiceButtons.length; i++) {\n" +
-      "        choiceButtons[i].textContent = quiz.choices[i];\n" +
-      "        choiceButtons[i].disabled = false;\n" +
-      "        choiceButtons[i].classList.remove('selected');\n" +
-      "      }\n" +
-      "    }\n" +
-      "    function checkAnswer(selectedIndex) {\n" +
-      "      if (answered) { return; }\n" +
-      "      answered = true;\n" +
-      "      choiceButtons[selectedIndex].classList.add('selected');\n" +
-      "      if (selectedIndex === quizData[currentQuestionIndex].correctIndex) {\n" +
-      "        correctCount = correctCount + 1;\n" +
-      "        answerMessage.textContent = '正解！';\n" +
-      "        answerMessage.classList.add('correct');\n" +
-      "      } else {\n" +
-      "        answerMessage.textContent = '不正解';\n" +
-      "        answerMessage.classList.add('incorrect');\n" +
-      "      }\n" +
-      "      for (let i = 0; i < choiceButtons.length; i++) { choiceButtons[i].disabled = true; }\n" +
-      "      nextButton.classList.remove('hidden');\n" +
-      "    }\n" +
-      "    function goToNextQuestion() {\n" +
-      "      currentQuestionIndex = currentQuestionIndex + 1;\n" +
-      "      if (currentQuestionIndex < quizData.length) { showQuestion(); } else { showResult(); }\n" +
-      "    }\n" +
-      "    function showResult() {\n" +
-      "      showOnly(resultScreen);\n" +
-      "      scoreText.textContent = correctCount + ' / ' + quizData.length;\n" +
-      "      resultMessage.textContent = correctCount === quizData.length ? '全問正解です。すばらしい！' : (correctCount >= 2 ? 'よくできました。もう一度挑戦して満点を目指しましょう。' : 'もう一度チャレンジして、JavaScriptに慣れていきましょう。');\n" +
-      "    }\n" +
-      "    applyTheme(titleScreen);\n" +
-      "    applyTheme(quizScreen);\n" +
-      "    applyTheme(resultScreen);\n" +
-      "    startButton.addEventListener('click', startQuiz);\n" +
-      "    choiceButtons[0].addEventListener('click', function () { checkAnswer(0); });\n" +
-      "    choiceButtons[1].addEventListener('click', function () { checkAnswer(1); });\n" +
-      "    choiceButtons[2].addEventListener('click', function () { checkAnswer(2); });\n" +
-      "    nextButton.addEventListener('click', goToNextQuestion);\n" +
-      "    retryButton.addEventListener('click', startQuiz);\n" +
-      "    backToTitleButton.addEventListener('click', showTitle);\n" +
-      (issuanceReference ? "    const workReference = document.getElementById('work-reference');\n    if (workReference) { workReference.textContent = issuanceReference.workId ? '発行ID: ' + issuanceReference.workId : ''; }\n" : "") +
-      "    showTitle();\n" +
+      getEducationalQuizScript(work) + "\n" +
       "  </script>\n" +
       "</body>\n" +
       "</html>";
@@ -2035,6 +2133,7 @@
     WORK_LIMITS: WORK_LIMITS,
     NAMED_COLORS: NAMED_COLORS,
     COMPANY_NAME: COMPANY_NAME,
+    COMPANY_LEGAL_NAME: COMPANY_LEGAL_NAME,
     COMPANY_URL: COMPANY_URL,
     MAKER_CREDIT_POWERED: MAKER_CREDIT_POWERED,
     MAKER_CREDIT_BRAND: MAKER_CREDIT_BRAND,
@@ -2063,6 +2162,8 @@
     findLearnerRgbLiteralByName: findLearnerRgbLiteralByName,
     findLearnerRgbLiteralAtOffset: findLearnerRgbLiteralAtOffset,
     createMakerCreditHtml: createMakerCreditHtml,
+    createResultBrandHtml: createResultBrandHtml,
+    getEmbeddedLogoSrc: getEmbeddedLogoSrc,
     getQuizSurfaceCss: getQuizSurfaceCss,
     getQuizPageCss: getQuizPageCss,
     getQuizSurfaceMarkup: getQuizSurfaceMarkup,

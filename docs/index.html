@@ -61,7 +61,7 @@
           <h3 id="completion-heading" class="sidebar-section-title">完成</h3>
           <div class="completion-card">
             <p class="completion-title">全STEPクリア！</p>
-            <p class="completion-copy">オリジナルクイズが完成しました。発行コードを使って、完成したクイズを受け取りましょう。</p>
+            <p class="completion-copy">オリジナルクイズが完成しました。STEP 5の横の「CLEAR」から発行コードを入力すると、完成したクイズをメール添付で受け取れます。</p>
             <button id="receive-quiz-button" class="main-button receive-quiz-button" type="button" disabled>完成したクイズを受け取る</button>
           </div>
         </section>
@@ -129,14 +129,17 @@
           <div class="preview-bezel">
             <div class="quiz-surface">
               <section id="title-screen" class="screen title-screen">
+                <img class="studio-logo" src="owl-logo.png" alt="OWL Technology">
+                <p class="studio-product-name">OWL JS Studio</p>
                 <p class="kicker">3択クイズ</p>
                 <h3 id="game-title" class="game-title">はじめての3択クイズ</h3>
                 <p id="quiz-total" class="quiz-total">全3問</p>
                 <button id="start-button" class="main-button start-button" type="button">はじめる</button>
-                <p class="maker-credit"><span class="maker-credit-powered">Powered by</span><a href="https://owl-tec.co.jp/" target="_blank" rel="noopener noreferrer">OWL Technology</a></p>
+                <p class="maker-credit"><span class="maker-credit-powered">Powered by OWL Technology</span><span class="company-legal">株式会社アウルテクノロジー</span><a href="https://owl-tec.co.jp/" target="_blank" rel="noopener noreferrer">会社ホームページ</a></p>
               </section>
 
               <section id="quiz-screen" class="screen quiz-screen hidden">
+                <p class="quiz-brand-mark">OWL JS Studio</p>
                 <p id="question-number" class="question-number">第1問 / 全3問</p>
                 <div class="question-meter" aria-hidden="true"><span id="question-meter-fill" class="question-meter-fill"></span></div>
                 <h3 id="question-text" class="question-text">問題文が入ります</h3>
@@ -161,6 +164,9 @@
                   <button id="retry-button" class="main-button" type="button">もう一度挑戦する</button>
                   <button id="back-to-title-button" class="main-button" type="button">タイトルへ戻る</button>
                 </div>
+                <p class="result-celebrate">学習を最後まで進めました。オリジナルクイズの完成、おめでとうございます。</p>
+                <p class="result-company">このクイズは、株式会社アウルテクノロジーのプログラミング学習特典「OWL JS Studio」で作成されました。</p>
+                <p class="maker-credit"><a href="https://owl-tec.co.jp/" target="_blank" rel="noopener noreferrer">株式会社アウルテクノロジー のホームページ</a></p>
               </section>
             </div>
           </div>
@@ -179,7 +185,7 @@
     <span id="status-cursor">Ln 1, Col 1</span>
     <span>JavaScript</span>
     <span>UTF-8</span>
-    <span>v0.9.12</span>
+    <span>v0.9.13</span>
   </footer>
 
   <div id="reset-dialog" class="modal-overlay hidden" hidden>

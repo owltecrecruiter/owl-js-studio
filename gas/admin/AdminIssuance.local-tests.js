@@ -4,6 +4,8 @@
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
+require("./print-assets");
+require("../embedded-brand-assets");
 const backendApi = require("../IssuanceBackend");
 const adminApp = require("./AdminIssuanceApp");
 
@@ -276,10 +278,17 @@ test("interviewer HTML has copy/continue controls and no secrets", function () {
   const html = adminApp.createInterviewerAppHtml();
   assert.ok(html.indexOf("発行コードを生成する") !== -1);
   assert.ok(html.indexOf("コードをコピー") !== -1);
+  assert.ok(html.indexOf("特典カードを印刷") !== -1);
   assert.ok(html.indexOf("続けて発行する") !== -1);
+  assert.ok(html.indexOf("@page{size:105mm 148mm") !== -1);
+  assert.ok(html.indexOf("プログラミング学習特典") !== -1);
+  assert.ok(html.indexOf("利用の流れ") !== -1);
+  assert.ok(html.indexOf("print-card") !== -1);
+  assert.ok(html.indexOf("window.print") !== -1);
   assert.ok(html.indexOf("type=\"password\"") !== -1);
   assert.ok(html.indexOf("inFlight") !== -1);
   assert.ok(html.indexOf("generateInterviewerCode") !== -1);
+  assert.ok(html.indexOf("owltecrecruiter.github.io/owl-js-studio") !== -1);
   assert.strictEqual(html.indexOf("ADMIN_API_TOKEN"), -1);
   assert.strictEqual(html.indexOf("INTERVIEWER_ADMIN_PASSWORD"), -1);
   assert.strictEqual(html.indexOf("CODE_HASH_PEPPER"), -1);
