@@ -215,6 +215,7 @@
     <pre id="log">待機中...</pre>
   </main>
 
+  <script src="studio-config.js"></script>
   <script>
     (function () {
       "use strict";
@@ -250,7 +251,23 @@
       startButton.addEventListener("click", startConnectivityTest);
       clearButton.addEventListener("click", resetScreen);
 
+      applyStudioConfig();
       updateExpectedOrigins();
+      if (shouldAutostart()) {
+        startConnectivityTest();
+      }
+
+      function applyStudioConfig() {
+        const config = window.OWL_JS_STUDIO_CONFIG || {};
+        const url = String(config.gasBridgeUrl || "").trim();
+        if (url) {
+          bridgeUrlInput.value = url;
+        }
+      }
+
+      function shouldAutostart() {
+        return /(?:^|[?&])autostart=1(?:&|$)/.test(location.search);
+      }
 
       function startConnectivityTest() {
         resetActiveTest();
