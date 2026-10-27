@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.9
+ * OWL JS Studio v0.9.10
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -1511,6 +1511,48 @@
     };
   }
 
+  function areAllStepsComplete(parsedData, parseError, initialWork, evidence) {
+    var stepNumber;
+    for (stepNumber = 1; stepNumber <= 5; stepNumber++) {
+      if (evaluateStepProgress(parsedData, stepNumber, parseError, initialWork, evidence).done !== true) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function formatIssuanceResultCopy(result) {
+    var status = result && result.deliveryStatus ? String(result.deliveryStatus) : "";
+    var copy = {
+      title: "発行申請が完了しました",
+      body: "完成したクイズの受け取り方法をご確認ください。",
+      mailSent: status === "sent"
+    };
+    if (copy.mailSent === true) {
+      copy.body = "完成したクイズの受け取り方法をご確認ください。メールを送信しました。";
+    } else if (status === "failed") {
+      copy.body = "完成したクイズの受け取り方法をご確認ください。配送に失敗したため、管理者に連絡してください。";
+    }
+    return copy;
+  }
+
+  function formatIssuanceErrorCopy(error) {
+    var message = error && error.message ? String(error.message) : "発行できませんでした。時間をおいてもう一度お試しください。";
+    if (message.indexOf("GAS bridge URL is not configured") !== -1) {
+      return "発行サーバーに接続できません。管理者に連絡してください。";
+    }
+    if (message.indexOf("already in progress") !== -1) {
+      return "発行申請を処理中です。完了するまでお待ちください。";
+    }
+    if (message.indexOf("timed out") !== -1) {
+      return "発行サーバーからの応答がありません。時間をおいてもう一度お試しください。";
+    }
+    if (message.indexOf("No validated quiz data") !== -1 || message.indexOf("getLastValidQuizData() is unavailable") !== -1) {
+      return "完成したクイズデータがありません。エラーを直してから発行してください。";
+    }
+    return message;
+  }
+
   function getStepFocusLines(parsedData, stepNumber) {
     if (!parsedData) {
       return [];
@@ -2037,6 +2079,9 @@
     hasPairedStep5Question: hasPairedStep5Question,
     questionHasPairedStep5Edits: questionHasPairedStep5Edits,
     evaluateStepProgress: evaluateStepProgress,
+    areAllStepsComplete: areAllStepsComplete,
+    formatIssuanceResultCopy: formatIssuanceResultCopy,
+    formatIssuanceErrorCopy: formatIssuanceErrorCopy,
     getStepFocusLines: getStepFocusLines,
     describeIdentifier: describeIdentifier,
     createStandaloneQuizHtml: createStandaloneQuizHtml,

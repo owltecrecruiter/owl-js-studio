@@ -1107,6 +1107,77 @@ button {
   margin-top: 6px;
 }
 
+.completion-card {
+  padding: 12px;
+  color: var(--text);
+  background: #1f3a24;
+  border: 1px solid #3f6b43;
+}
+
+.completion-title {
+  margin: 0 0 8px;
+  color: #b5cea8;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.completion-copy {
+  margin: 0 0 12px;
+  color: #d4d4d4;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.receive-quiz-button {
+  width: 100%;
+}
+
+.issuance-card {
+  width: min(460px, 100%);
+}
+
+.issuance-label {
+  display: block;
+  margin: 10px 0 6px;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.issuance-code-input {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  color: var(--text);
+  background: #1e1e1e;
+  border: 1px solid #3e3e42;
+  font-family: var(--editor-font);
+  font-size: 14px;
+}
+
+.issuance-code-input:focus {
+  outline: 2px solid #75beff;
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.issuance-status {
+  min-height: 1.4em;
+  margin: 8px 0 0;
+  color: #e2c08d;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.issuance-status.error {
+  color: #f48771;
+}
+
+.issuance-result-title {
+  color: #b5cea8;
+  font-weight: 700;
+}
+
 .hidden {
   display: none;
 }

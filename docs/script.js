@@ -19,6 +19,9 @@ const cloneWorkData = studioCore.cloneWorkData;
 const validateWorkData = studioCore.validateWorkData;
 const createStandaloneQuizHtml = studioCore.createStandaloneQuizHtml;
 const evaluateStepProgress = studioCore.evaluateStepProgress;
+const areAllStepsComplete = studioCore.areAllStepsComplete;
+const formatIssuanceResultCopy = studioCore.formatIssuanceResultCopy;
+const formatIssuanceErrorCopy = studioCore.formatIssuanceErrorCopy;
 const getStepFocusLines = studioCore.getStepFocusLines;
 const describeIdentifier = studioCore.describeIdentifier;
 const getContrastWarning = studioCore.getContrastWarning;
@@ -66,6 +69,19 @@ const stepDescription = document.getElementById("step-description");
 const stepProgress = document.getElementById("step-progress");
 const hintButton = document.getElementById("hint-button");
 const hintList = document.getElementById("hint-list");
+const completionGuide = document.getElementById("completion-guide");
+const receiveQuizButton = document.getElementById("receive-quiz-button");
+const issuanceDialog = document.getElementById("issuance-dialog");
+const issuanceFormView = document.getElementById("issuance-form-view");
+const issuancePendingView = document.getElementById("issuance-pending-view");
+const issuanceResultView = document.getElementById("issuance-result-view");
+const issuanceCodeInput = document.getElementById("issuance-code-input");
+const issuanceFormStatus = document.getElementById("issuance-form-status");
+const issuanceCancelButton = document.getElementById("issuance-cancel-button");
+const issuanceSubmitButton = document.getElementById("issuance-submit-button");
+const issuanceDoneButton = document.getElementById("issuance-done-button");
+const issuanceResultTitle = document.getElementById("issuance-result-title");
+const issuanceResultBody = document.getElementById("issuance-result-body");
 const activityEditor = document.getElementById("activity-editor");
 const activityGuide = document.getElementById("activity-guide");
 const guideSidebar = document.getElementById("guide-sidebar");
@@ -138,6 +154,9 @@ let lastRunWork = null;
 let confirmedNewCorrect = false;
 let furiganaHasBeenOn = false;
 let resetDialogLastFocus = null;
+let issuanceLastFocus = null;
+let issuanceInFlight = false;
+let announcedAllStepsComplete = false;
 const announcedStepClears = {
   1: false,
   2: false,
@@ -521,6 +540,14 @@ function announceNewlyCompletedSteps() {
       announcedStepClears[stepNumber] = false;
     }
   }
+  if (areAllStepsComplete(parsed, parseError, initialQuizSnapshot, getStepEvidence()) === true) {
+    if (announcedAllStepsComplete !== true) {
+      announcedAllStepsComplete = true;
+      appendConsole("success", "全STEPクリア！完成したクイズを受け取りましょう。");
+    }
+  } else {
+    announcedAllStepsComplete = false;
+  }
 }
 
 // ==================================================
@@ -681,6 +708,22 @@ function renderStepGuide(parsed, parseError) {
   stepProgress.className = result.done ? "step-progress complete" : "step-progress";
 
   renderHints();
+  renderCompletionGuide(parsed, parseError);
+}
+
+function renderCompletionGuide(parsed, parseError) {
+  const allDone = areAllStepsComplete(parsed, parseError, initialQuizSnapshot, getStepEvidence()) === true;
+  if (allDone) {
+    completionGuide.hidden = false;
+    completionGuide.removeAttribute("hidden");
+    completionGuide.classList.remove("hidden");
+    receiveQuizButton.disabled = false;
+  } else {
+    completionGuide.hidden = true;
+    completionGuide.setAttribute("hidden", "");
+    completionGuide.classList.add("hidden");
+    receiveQuizButton.disabled = true;
+  }
 }
 
 function renderStepButtons(parsed, parseError) {
@@ -848,7 +891,11 @@ function getLastValidQuizData() {
   if (lastValidQuizData === null) {
     return null;
   }
-  return cloneWorkData(lastValidQuizData);
+  try {
+    return validateWorkData(cloneWorkData(lastValidQuizData));
+  } catch (error) {
+    return null;
+  }
 }
 
 function getVerifiedStandaloneQuizData() {
@@ -1537,7 +1584,201 @@ function cancelResetCode() {
   closeResetDialog();
 }
 
+function getGasBridgeUrl() {
+  const config = window.OWL_JS_STUDIO_CONFIG || {};
+  return String(config.gasBridgeUrl || "").trim();
+}
+
+function getIssueClientOptions() {
+  return {
+    bridgeUrl: getGasBridgeUrl(),
+    timeoutMs: 30000
+  };
+}
+
+function createStudioIssueClient() {
+  if (typeof window.createOwlJsStudioIssueClient === "function") {
+    return window.createOwlJsStudioIssueClient(getIssueClientOptions());
+  }
+  const api = window.JSQuizGasBridgeV06;
+  if (!api || typeof api.createGasBridgeClient !== "function") {
+    throw new Error("GAS bridge URL is not configured.");
+  }
+  return api.createGasBridgeClient(getIssueClientOptions());
+}
+
+function isIssuanceDialogOpen() {
+  return issuanceDialog.hidden !== true && issuanceDialog.classList.contains("hidden") === false;
+}
+
+function setIssuanceView(viewName) {
+  const showForm = viewName === "form";
+  const showPending = viewName === "pending";
+  const showResult = viewName === "result";
+  issuanceFormView.hidden = showForm === false;
+  issuanceFormView.classList.toggle("hidden", showForm === false);
+  if (showForm) {
+    issuanceFormView.removeAttribute("hidden");
+  } else {
+    issuanceFormView.setAttribute("hidden", "");
+  }
+  issuancePendingView.hidden = showPending === false;
+  issuancePendingView.classList.toggle("hidden", showPending === false);
+  if (showPending) {
+    issuancePendingView.removeAttribute("hidden");
+  } else {
+    issuancePendingView.setAttribute("hidden", "");
+  }
+  issuanceResultView.hidden = showResult === false;
+  issuanceResultView.classList.toggle("hidden", showResult === false);
+  if (showResult) {
+    issuanceResultView.removeAttribute("hidden");
+  } else {
+    issuanceResultView.setAttribute("hidden", "");
+  }
+}
+
+function setIssuanceFormStatus(message, isError) {
+  issuanceFormStatus.textContent = message || "";
+  issuanceFormStatus.className = isError ? "issuance-status error" : "issuance-status";
+}
+
+function openIssuanceDialog() {
+  if (receiveQuizButton.disabled === true) {
+    return;
+  }
+  if (isIssuanceDialogOpen()) {
+    issuanceCodeInput.focus();
+    return;
+  }
+  issuanceLastFocus = document.activeElement;
+  issuanceDialog.hidden = false;
+  issuanceDialog.removeAttribute("hidden");
+  issuanceDialog.classList.remove("hidden");
+  setIssuanceView("form");
+  issuanceCodeInput.value = "";
+  issuanceCodeInput.disabled = false;
+  issuanceSubmitButton.disabled = false;
+  issuanceCancelButton.disabled = false;
+  setIssuanceFormStatus("", false);
+  issuanceCodeInput.focus();
+}
+
+function closeIssuanceDialog() {
+  if (isIssuanceDialogOpen() === false) {
+    return;
+  }
+  if (issuanceInFlight === true) {
+    return;
+  }
+  issuanceDialog.hidden = true;
+  issuanceDialog.setAttribute("hidden", "");
+  issuanceDialog.classList.add("hidden");
+  if (issuanceLastFocus && typeof issuanceLastFocus.focus === "function") {
+    issuanceLastFocus.focus();
+  }
+  issuanceLastFocus = null;
+}
+
+function showIssuanceResult(result) {
+  const copy = formatIssuanceResultCopy(result || {});
+  issuanceResultTitle.textContent = copy.title;
+  issuanceResultBody.textContent = copy.body;
+  setIssuanceView("result");
+  issuanceDoneButton.focus();
+}
+
+function submitIssuanceRequest() {
+  if (issuanceInFlight === true) {
+    setIssuanceFormStatus("発行申請を処理中です。完了するまでお待ちください。", true);
+    return;
+  }
+  const code = issuanceCodeInput.value.trim();
+  if (code === "") {
+    setIssuanceFormStatus("発行コードを入力してください。", true);
+    issuanceCodeInput.focus();
+    return;
+  }
+  if (!getLastValidQuizData()) {
+    setIssuanceFormStatus("完成したクイズデータがありません。エラーを直してから発行してください。", true);
+    return;
+  }
+  if (getGasBridgeUrl() === "" && typeof window.createOwlJsStudioIssueClient !== "function") {
+    setIssuanceFormStatus("発行サーバーに接続できません。管理者に連絡してください。", true);
+    return;
+  }
+
+  let client;
+  try {
+    client = createStudioIssueClient();
+  } catch (error) {
+    setIssuanceFormStatus(formatIssuanceErrorCopy(error), true);
+    return;
+  }
+
+  issuanceInFlight = true;
+  issuanceSubmitButton.disabled = true;
+  issuanceCancelButton.disabled = true;
+  issuanceCodeInput.disabled = true;
+  setIssuanceView("pending");
+
+  let issuePromise;
+  try {
+    issuePromise = client.issueCurrentQuiz({ code: code });
+  } catch (error) {
+    issuanceInFlight = false;
+    issuanceSubmitButton.disabled = false;
+    issuanceCancelButton.disabled = false;
+    issuanceCodeInput.disabled = false;
+    setIssuanceView("form");
+    setIssuanceFormStatus(formatIssuanceErrorCopy(error), true);
+    return;
+  }
+
+  Promise.resolve(issuePromise).then(function (result) {
+    issuanceInFlight = false;
+    issuanceSubmitButton.disabled = false;
+    issuanceCancelButton.disabled = false;
+    issuanceCodeInput.disabled = false;
+    if (!result || result.ok !== true) {
+      setIssuanceView("form");
+      setIssuanceFormStatus("発行できませんでした。時間をおいてもう一度お試しください。", true);
+      return;
+    }
+    showIssuanceResult(result);
+  }).catch(function (error) {
+    issuanceInFlight = false;
+    issuanceSubmitButton.disabled = false;
+    issuanceCancelButton.disabled = false;
+    issuanceCodeInput.disabled = false;
+    setIssuanceView("form");
+    setIssuanceFormStatus(formatIssuanceErrorCopy(error), true);
+  });
+}
+
+function handleIssuanceDialogKeydown(event) {
+  if (isIssuanceDialogOpen() === false) {
+    return false;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    if (issuanceInFlight !== true) {
+      closeIssuanceDialog();
+    }
+    return true;
+  }
+  if (event.key === "Enter" && event.target === issuanceCodeInput) {
+    event.preventDefault();
+    submitIssuanceRequest();
+    return true;
+  }
+  return false;
+}
+
 function handleResetDialogKeydown(event) {
+  if (handleIssuanceDialogKeydown(event)) {
+    return true;
+  }
   if (isResetDialogOpen() === false) {
     return false;
   }
@@ -1813,7 +2054,7 @@ document.addEventListener("keydown", function (event) {
   if (event.isComposing || event.keyCode === 229 || isEditorComposing()) {
     return;
   }
-  if (isResetDialogOpen()) {
+  if (isResetDialogOpen() || isIssuanceDialogOpen()) {
     return;
   }
   const historyAction = undoRedoActionFromEvent(event);
@@ -1873,6 +2114,10 @@ hintButton.addEventListener("click", function () {
   }
   renderHints();
 });
+receiveQuizButton.addEventListener("click", openIssuanceDialog);
+issuanceCancelButton.addEventListener("click", closeIssuanceDialog);
+issuanceDoneButton.addEventListener("click", closeIssuanceDialog);
+issuanceSubmitButton.addEventListener("click", submitIssuanceRequest);
 
 choiceButtons[0].addEventListener("click", function () {
   checkAnswer(0);
@@ -1964,3 +2209,21 @@ window.previewGoBack = previewGoBack;
 window.previewGoForward = previewGoForward;
 window.previewRestartFromTitle = previewRestartFromTitle;
 window.resetPreviewSession = resetPreviewSession;
+window.areAllLearningStepsComplete = function () {
+  let parsed = null;
+  let parseError = null;
+  try {
+    parsed = parseLearnerCode(codeEditor.value);
+  } catch (error) {
+    parseError = error;
+  }
+  return areAllStepsComplete(parsed, parseError, initialQuizSnapshot, getStepEvidence());
+};
+window.openIssuanceDialog = openIssuanceDialog;
+window.closeIssuanceDialog = closeIssuanceDialog;
+window.isIssuanceDialogOpen = isIssuanceDialogOpen;
+window.submitIssuanceRequest = submitIssuanceRequest;
+window.getGasBridgeUrl = getGasBridgeUrl;
+window.isIssuanceInFlight = function () {
+  return issuanceInFlight === true;
+};

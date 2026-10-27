@@ -57,6 +57,15 @@
           </div>
         </section>
 
+        <section id="completion-guide" class="guide-section completion-guide hidden" hidden aria-labelledby="completion-heading">
+          <h3 id="completion-heading" class="sidebar-section-title">完成</h3>
+          <div class="completion-card">
+            <p class="completion-title">全STEPクリア！</p>
+            <p class="completion-copy">オリジナルクイズが完成しました。発行コードを使って、完成したクイズを受け取りましょう。</p>
+            <button id="receive-quiz-button" class="main-button receive-quiz-button" type="button" disabled>完成したクイズを受け取る</button>
+          </div>
+        </section>
+
         <section class="guide-section" aria-labelledby="syntax-heading">
           <h3 id="syntax-heading" class="sidebar-section-title">構文</h3>
           <p id="token-detail" class="token-detail">カーソル位置の部品の意味がここに表示されます。</p>
@@ -170,7 +179,7 @@
     <span id="status-cursor">Ln 1, Col 1</span>
     <span>JavaScript</span>
     <span>UTF-8</span>
-    <span>v0.9.9</span>
+    <span>v0.9.10</span>
   </footer>
 
   <div id="reset-dialog" class="modal-overlay hidden" hidden>
@@ -183,6 +192,32 @@
       <div class="modal-actions">
         <button id="reset-cancel-button" class="sub-button" type="button">キャンセル</button>
         <button id="reset-confirm-button" class="main-button" type="button">初期状態に戻す</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="issuance-dialog" class="modal-overlay hidden" hidden>
+    <div class="modal-card issuance-card" role="dialog" aria-modal="true" aria-labelledby="issuance-dialog-title" aria-describedby="issuance-dialog-copy">
+      <h2 id="issuance-dialog-title">完成したクイズを受け取る</h2>
+      <div id="issuance-form-view">
+        <p id="issuance-dialog-copy">授業で受け取った発行コードを入力してください。発行コードは1回だけ使えます。</p>
+        <label class="issuance-label" for="issuance-code-input">発行コード</label>
+        <input id="issuance-code-input" class="issuance-code-input" type="text" autocomplete="off" spellcheck="false" maxlength="80" placeholder="発行コードを入力">
+        <p id="issuance-form-status" class="issuance-status" aria-live="polite"></p>
+        <div class="modal-actions">
+          <button id="issuance-cancel-button" class="sub-button" type="button">学習画面に戻る</button>
+          <button id="issuance-submit-button" class="main-button" type="button">発行を申請する</button>
+        </div>
+      </div>
+      <div id="issuance-pending-view" class="hidden" hidden>
+        <p>発行申請を処理しています。このままお待ちください。</p>
+      </div>
+      <div id="issuance-result-view" class="hidden" hidden>
+        <p id="issuance-result-title" class="issuance-result-title"></p>
+        <p id="issuance-result-body"></p>
+        <div class="modal-actions">
+          <button id="issuance-done-button" class="main-button" type="button">学習画面に戻る</button>
+        </div>
       </div>
     </div>
   </div>
@@ -213,7 +248,9 @@
     </div>
   </div>
 
+  <script src="studio-config.js"></script>
   <script src="studio-core.js"></script>
+  <script src="issuance-v06-client.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
