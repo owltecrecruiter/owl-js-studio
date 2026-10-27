@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.6
+ * OWL JS Studio v0.9.7
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -1653,6 +1653,139 @@
     };
   }
 
+  function createPreviewHistory(options) {
+    var settings = options || {};
+    var questionCount = typeof settings.questionCount === "number" && settings.questionCount > 0
+      ? settings.questionCount
+      : 3;
+
+    function emptyAnswers() {
+      var list = [];
+      var i;
+      for (i = 0; i < questionCount; i++) {
+        list.push(null);
+      }
+      return list;
+    }
+
+    var screens = ["title"];
+    var index = 0;
+    var answers = emptyAnswers();
+
+    function cloneAnswers() {
+      return answers.slice();
+    }
+
+    function cloneScreens() {
+      return screens.slice();
+    }
+
+    function current() {
+      return screens[index];
+    }
+
+    function hasAnyAnswer() {
+      var i;
+      for (i = 0; i < answers.length; i++) {
+        if (answers[i] !== null) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function snapshot() {
+      return {
+        screen: current(),
+        index: index,
+        screens: cloneScreens(),
+        answers: cloneAnswers(),
+        canBack: index > 0,
+        canForward: index < screens.length - 1,
+        canRestart: index !== 0 || screens.length > 1 || hasAnyAnswer()
+      };
+    }
+
+    function reset() {
+      screens = ["title"];
+      index = 0;
+      answers = emptyAnswers();
+      return snapshot();
+    }
+
+    function back() {
+      if (index > 0) {
+        index = index - 1;
+      }
+      return snapshot();
+    }
+
+    function forward() {
+      if (index < screens.length - 1) {
+        index = index + 1;
+      }
+      return snapshot();
+    }
+
+    function navigateTo(screen) {
+      if (index < screens.length - 1 && screens[index + 1] === screen) {
+        index = index + 1;
+        return snapshot();
+      }
+      screens = screens.slice(0, index + 1);
+      screens.push(screen);
+      index = screens.length - 1;
+      return snapshot();
+    }
+
+    function recordAnswer(questionIndex, choice) {
+      var previous = answers[questionIndex];
+      var changed = previous !== null && previous !== choice;
+      var i;
+      answers[questionIndex] = choice;
+      if (changed) {
+        for (i = questionIndex + 1; i < questionCount; i++) {
+          answers[i] = null;
+        }
+        screens = screens.slice(0, index + 1);
+      }
+      return {
+        previous: previous,
+        changed: changed,
+        first: previous === null,
+        snapshot: snapshot()
+      };
+    }
+
+    function getAnswer(questionIndex) {
+      return answers[questionIndex];
+    }
+
+    function score(correctIndexes) {
+      var n = 0;
+      var i;
+      for (i = 0; i < questionCount; i++) {
+        if (answers[i] !== null && correctIndexes && answers[i] === correctIndexes[i]) {
+          n = n + 1;
+        }
+      }
+      return n;
+    }
+
+    return {
+      reset: reset,
+      back: back,
+      forward: forward,
+      navigateTo: navigateTo,
+      recordAnswer: recordAnswer,
+      getAnswer: getAnswer,
+      current: current,
+      snapshot: snapshot,
+      getState: snapshot,
+      score: score
+    };
+  }
+
   function safeSerializeForInlineScript(value) {
     return JSON.stringify(value)
       .replace(/</g, "\\u003C")
@@ -1871,6 +2004,7 @@
     safeSerializeForInlineScript: safeSerializeForInlineScript,
     createCodeError: createCodeError,
     workLooksComplete: workLooksComplete,
-    createCodeHistory: createCodeHistory
+    createCodeHistory: createCodeHistory,
+    createPreviewHistory: createPreviewHistory
   };
 });

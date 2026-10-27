@@ -601,8 +601,7 @@ button {
 .preview-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   min-height: 35px;
   padding: 0 12px;
   background: #1e2736;
@@ -623,6 +622,18 @@ button {
   color: #9aa8b8;
   font-size: 11px;
   white-space: nowrap;
+}
+
+.preview-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.preview-nav-button {
+  padding: 3px 8px;
+  font-size: 11px;
 }
 
 .preview-stage {

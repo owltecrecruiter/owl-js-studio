@@ -34,6 +34,7 @@ const replaceConstStringLiteral = studioCore.replaceConstStringLiteral;
 const findLearnerRgbLiteralByName = studioCore.findLearnerRgbLiteralByName;
 const findLearnerRgbLiteralAtOffset = studioCore.findLearnerRgbLiteralAtOffset;
 const createCodeHistory = studioCore.createCodeHistory;
+const createPreviewHistory = studioCore.createPreviewHistory;
 
 // ==================================================
 // 画面要素
@@ -89,6 +90,9 @@ const retryButton = document.getElementById("retry-button");
 const backToTitleButton = document.getElementById("back-to-title-button");
 const previewRunState = document.getElementById("preview-run-state");
 const previewProgress = document.getElementById("preview-progress");
+const previewBackButton = document.getElementById("preview-back-button");
+const previewForwardButton = document.getElementById("preview-forward-button");
+const previewRestartButton = document.getElementById("preview-restart-button");
 const colorPickerPopover = document.getElementById("color-picker-popover");
 const cpSv = document.getElementById("cp-sv");
 const cpSvThumb = document.getElementById("cp-sv-thumb");
@@ -114,8 +118,8 @@ const choiceButtons = [
 let quizData = [];
 let currentWork = null;
 let currentQuestionIndex = 0;
-let correctCount = 0;
 let answered = false;
+const previewHistory = createPreviewHistory({ questionCount: 3 });
 let lastValidQuizData = null;
 let lastValidSourceCode = null;
 let latestParsedSupportData = null;
@@ -872,7 +876,7 @@ function applyCodeToPreview() {
       confirmedNewCorrect = false;
     }
     applyWorkTheme(currentWork);
-    showTitleScreen();
+    resetPreviewSession();
     removeConsoleByKind("error");
     showSuccess("実行成功：クイズを更新しました。");
     if (parsed.contrastWarning) {
@@ -1284,15 +1288,16 @@ function isPreviewRunFresh() {
 }
 
 function updatePreviewChrome() {
+  const state = previewHistory.getState();
   let screenLabel = "タイトル";
   let progressLabel = "タイトル画面";
-  if (quizScreen.classList.contains("hidden") === false) {
-    const questionNo = currentQuestionIndex + 1;
-    screenLabel = "問" + questionNo + "/3";
-    progressLabel = answered ? questionNo + "/3 答え済み" : "第" + questionNo + "問";
-  } else if (resultScreen.classList.contains("hidden") === false) {
+  if (state.screen === "result") {
     screenLabel = "結果";
     progressLabel = "結果";
+  } else if (typeof state.screen === "number") {
+    const questionNo = state.screen + 1;
+    screenLabel = "問" + questionNo + "/3";
+    progressLabel = answered ? questionNo + "/3 答え済み" : "第" + questionNo + "問";
   }
   if (previewRunState) {
     previewRunState.textContent = isPreviewRunFresh() ? "実行済 · " + screenLabel : "未実行";
@@ -1300,11 +1305,51 @@ function updatePreviewChrome() {
   if (previewProgress) {
     previewProgress.textContent = progressLabel;
   }
+  updatePreviewNavButtons(state);
 }
 
-function showTitleScreen() {
+function updatePreviewNavButtons(state) {
+  const nav = state || previewHistory.getState();
+  if (previewBackButton) {
+    previewBackButton.disabled = nav.canBack === false;
+  }
+  if (previewForwardButton) {
+    previewForwardButton.disabled = nav.canForward === false;
+  }
+  if (previewRestartButton) {
+    previewRestartButton.disabled = nav.canRestart === false;
+  }
+}
+
+function getPreviewCorrectIndexes() {
+  const indexes = [];
+  for (let i = 0; i < quizData.length; i++) {
+    indexes.push(quizData[i].correctIndex);
+  }
+  return indexes;
+}
+
+function restoreCurrentPreviewScreen() {
+  const screen = previewHistory.current();
+  if (screen === "title") {
+    renderTitleScreen();
+    return;
+  }
+  if (screen === "result") {
+    renderResultScreen();
+    return;
+  }
+  currentQuestionIndex = screen;
+  renderQuestionScreen();
+}
+
+function resetPreviewSession() {
+  previewHistory.reset();
+  restoreCurrentPreviewScreen();
+}
+
+function renderTitleScreen() {
   currentQuestionIndex = 0;
-  correctCount = 0;
   answered = false;
   if (currentWork) {
     gameTitleLabel.textContent = currentWork.gameTitle;
@@ -1315,24 +1360,26 @@ function showTitleScreen() {
 }
 
 function startQuiz() {
-  currentQuestionIndex = 0;
-  correctCount = 0;
-  showQuestion();
+  previewHistory.navigateTo(0);
+  restoreCurrentPreviewScreen();
 }
 
-function showQuestion() {
-  const quiz = quizData[currentQuestionIndex];
+function retryQuiz() {
+  previewHistory.reset();
+  previewHistory.navigateTo(0);
+  restoreCurrentPreviewScreen();
+}
 
-  answered = false;
+function renderQuestionScreen() {
+  const quiz = quizData[currentQuestionIndex];
+  const saved = previewHistory.getAnswer(currentQuestionIndex);
+
   showOnlyPreviewScreen(quizScreen);
   questionNumber.textContent = "第" + (currentQuestionIndex + 1) + "問 / 全3問";
   if (questionMeterFill) {
     questionMeterFill.style.width = (((currentQuestionIndex + 1) / quizData.length) * 100) + "%";
   }
   questionText.textContent = quiz.question;
-  answerMessage.textContent = "";
-  answerMessage.className = "answer-message";
-  nextButton.classList.add("hidden");
   nextButton.textContent = currentQuestionIndex === quizData.length - 1 ? "結果を見る" : "次の問題へ";
 
   for (let i = 0; i < choiceButtons.length; i++) {
@@ -1340,60 +1387,76 @@ function showQuestion() {
     choiceButtons[i].disabled = false;
     choiceButtons[i].classList.remove("selected");
   }
+
+  if (saved === null) {
+    answered = false;
+    answerMessage.textContent = "";
+    answerMessage.className = "answer-message";
+    nextButton.classList.add("hidden");
+  } else {
+    paintAnswer(saved);
+  }
   updatePreviewChrome();
 }
 
-function checkAnswer(selectedIndex) {
-  if (answered === true) {
-    return;
-  }
-
+function paintAnswer(selectedIndex) {
   answered = true;
-  choiceButtons[selectedIndex].classList.add("selected");
-
+  for (let i = 0; i < choiceButtons.length; i++) {
+    choiceButtons[i].classList.toggle("selected", i === selectedIndex);
+    choiceButtons[i].disabled = false;
+  }
+  answerMessage.className = "answer-message";
   if (selectedIndex === quizData[currentQuestionIndex].correctIndex) {
-    correctCount = correctCount + 1;
     answerMessage.textContent = "正解！";
     answerMessage.classList.add("correct");
-    if (
-      initialQuizSnapshot &&
-      lastRunWork &&
-      lastRunSourceCode === codeEditor.value &&
-      lastRunWork.questions[currentQuestionIndex].correctIndex !== initialQuizSnapshot.questions[currentQuestionIndex].correctIndex
-    ) {
-      confirmedNewCorrect = true;
-      updateLearningSupport();
-      announceNewlyCompletedSteps();
-    }
   } else {
     answerMessage.textContent = "不正解";
     answerMessage.classList.add("incorrect");
   }
-
-  disableChoices();
   nextButton.classList.remove("hidden");
+}
+
+function maybeConfirmNewCorrect(selectedIndex) {
+  if (
+    selectedIndex === quizData[currentQuestionIndex].correctIndex &&
+    initialQuizSnapshot &&
+    lastRunWork &&
+    lastRunSourceCode === codeEditor.value &&
+    lastRunWork.questions[currentQuestionIndex].correctIndex !== initialQuizSnapshot.questions[currentQuestionIndex].correctIndex
+  ) {
+    confirmedNewCorrect = true;
+    updateLearningSupport();
+    announceNewlyCompletedSteps();
+  }
+}
+
+function checkAnswer(selectedIndex) {
+  const previous = previewHistory.getAnswer(currentQuestionIndex);
+  if (previous === selectedIndex) {
+    return;
+  }
+
+  previewHistory.recordAnswer(currentQuestionIndex, selectedIndex);
+  paintAnswer(selectedIndex);
+  maybeConfirmNewCorrect(selectedIndex);
   updatePreviewChrome();
 }
 
-function disableChoices() {
-  for (let i = 0; i < choiceButtons.length; i++) {
-    choiceButtons[i].disabled = true;
-  }
-}
-
 function goToNextQuestion() {
-  currentQuestionIndex = currentQuestionIndex + 1;
-
-  if (currentQuestionIndex < quizData.length) {
-    showQuestion();
-  } else {
-    showResult();
+  if (previewHistory.getAnswer(currentQuestionIndex) === null) {
+    return;
   }
+  if (currentQuestionIndex < quizData.length - 1) {
+    previewHistory.navigateTo(currentQuestionIndex + 1);
+  } else {
+    previewHistory.navigateTo("result");
+  }
+  restoreCurrentPreviewScreen();
 }
 
-function showResult() {
+function renderResultScreen() {
+  const correctCount = previewHistory.score(getPreviewCorrectIndexes());
   showOnlyPreviewScreen(resultScreen);
-
   scoreText.textContent = correctCount + " / " + quizData.length;
 
   if (correctCount === quizData.length) {
@@ -1406,8 +1469,24 @@ function showResult() {
   updatePreviewChrome();
 }
 
-function restartQuiz() {
-  startQuiz();
+function previewGoBack() {
+  if (previewHistory.getState().canBack === false) {
+    return;
+  }
+  previewHistory.back();
+  restoreCurrentPreviewScreen();
+}
+
+function previewGoForward() {
+  if (previewHistory.getState().canForward === false) {
+    return;
+  }
+  previewHistory.forward();
+  restoreCurrentPreviewScreen();
+}
+
+function previewRestartFromTitle() {
+  resetPreviewSession();
 }
 
 function isResetDialogOpen() {
@@ -1799,8 +1878,11 @@ choiceButtons[2].addEventListener("click", function () {
 
 startButton.addEventListener("click", startQuiz);
 nextButton.addEventListener("click", goToNextQuestion);
-retryButton.addEventListener("click", startQuiz);
-backToTitleButton.addEventListener("click", showTitleScreen);
+retryButton.addEventListener("click", retryQuiz);
+backToTitleButton.addEventListener("click", previewRestartFromTitle);
+previewBackButton.addEventListener("click", previewGoBack);
+previewForwardButton.addEventListener("click", previewGoForward);
+previewRestartButton.addEventListener("click", previewRestartFromTitle);
 
 initializeLearningState();
 setGuideOpen(false);
@@ -1865,3 +1947,10 @@ window.isFuriganaOn = isFuriganaOn;
 window.buildFuriganaModel = buildFuriganaModel;
 window.renderFuriganaView = renderFuriganaView;
 window.updatePreviewChrome = updatePreviewChrome;
+window.getPreviewHistoryState = function () {
+  return previewHistory.getState();
+};
+window.previewGoBack = previewGoBack;
+window.previewGoForward = previewGoForward;
+window.previewRestartFromTitle = previewRestartFromTitle;
+window.resetPreviewSession = resetPreviewSession;
