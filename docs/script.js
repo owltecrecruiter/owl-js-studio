@@ -25,6 +25,8 @@ const rgbToHex = studioCore.rgbToHex;
 const hexToRgb = studioCore.hexToRgb;
 const readConstStringLiteral = studioCore.readConstStringLiteral;
 const replaceConstStringLiteral = studioCore.replaceConstStringLiteral;
+const findLearnerRgbLiteralByName = studioCore.findLearnerRgbLiteralByName;
+const findLearnerRgbLiteralAtOffset = studioCore.findLearnerRgbLiteralAtOffset;
 
 // ==================================================
 // 画面要素
@@ -72,10 +74,6 @@ const scoreText = document.getElementById("score-text");
 const resultMessage = document.getElementById("result-message");
 const retryButton = document.getElementById("retry-button");
 const backToTitleButton = document.getElementById("back-to-title-button");
-const backgroundColorOpener = document.getElementById("background-color-opener");
-const textColorOpener = document.getElementById("text-color-opener");
-const backgroundColorSwatch = document.getElementById("background-color-swatch");
-const textColorSwatch = document.getElementById("text-color-swatch");
 const colorPickerPopover = document.getElementById("color-picker-popover");
 const cpSv = document.getElementById("cp-sv");
 const cpSvThumb = document.getElementById("cp-sv-thumb");
@@ -118,6 +116,7 @@ let colorPickerTarget = null;
 let colorPickerHsv = { h: 0, s: 0, v: 1 };
 let colorPickerRgb = { r: 255, g: 255, b: 255 };
 let colorPickerDrag = null;
+const editorMeasureCanvas = document.createElement("canvas");
 const revealedHintCounts = {
   1: 0,
   2: 0,
@@ -179,6 +178,9 @@ function syncEditorOverlay() {
 
 function syncEditorScroll() {
   syncEditorOverlay();
+  if (isColorPickerOpen()) {
+    positionColorPickerForTarget();
+  }
 }
 
 function highlightCode(code) {
@@ -806,14 +808,9 @@ function applyPickerRgbToCode(constName, r, g, b) {
     return;
   }
 
-  const start = codeEditor.selectionStart;
-  const end = codeEditor.selectionEnd;
   applyingColorPicker = true;
   codeEditor.value = replacement.source;
-  codeEditor.setSelectionRange(
-    mapIndexThroughReplacement(start, replacement),
-    mapIndexThroughReplacement(end, replacement)
-  );
+  codeEditor.setSelectionRange(replacement.newEnd, replacement.newEnd);
   updateEditorView();
   applyingColorPicker = false;
 }
@@ -827,8 +824,6 @@ function applyPickerToCode(constName, hexValue) {
 }
 
 function syncColorPickersFromCode() {
-  syncOneColorSwatch("backgroundColor", backgroundColorSwatch);
-  syncOneColorSwatch("textColor", textColorSwatch);
   if (applyingColorPicker) {
     return;
   }
@@ -839,18 +834,6 @@ function syncColorPickersFromCode() {
       setColorPickerRgb(rgb.r, rgb.g, rgb.b, false);
     }
   }
-}
-
-function syncOneColorSwatch(constName, swatch) {
-  if (!swatch) {
-    return;
-  }
-  const literal = readConstStringLiteral(codeEditor.value, constName);
-  const rgb = literal ? parseRgbLiteral(literal) : null;
-  if (rgb === null) {
-    return;
-  }
-  swatch.style.backgroundColor = formatRgbLiteral(rgb.r, rgb.g, rgb.b);
 }
 
 function setColorPickerRgb(r, g, b, writeToCode) {
@@ -908,22 +891,72 @@ function closeColorPicker() {
   colorPickerPopover.hidden = true;
   colorPickerTarget = null;
   colorPickerDrag = null;
-  backgroundColorOpener.setAttribute("aria-expanded", "false");
-  textColorOpener.setAttribute("aria-expanded", "false");
 }
 
-function positionColorPicker(anchor) {
-  const rect = anchor.getBoundingClientRect();
-  const editorColumn = document.querySelector(".editor-column");
-  const editorRight = editorColumn ? editorColumn.getBoundingClientRect().right : 0;
+function getEditorTextMetrics() {
+  const style = window.getComputedStyle(codeEditor);
+  return {
+    lineHeight: parseFloat(style.lineHeight) || 21,
+    paddingTop: parseFloat(style.paddingTop) || 8,
+    paddingLeft: parseFloat(style.paddingLeft) || 12,
+    font: style.font
+  };
+}
+
+function measureEditorTextWidth(text) {
+  const context = editorMeasureCanvas.getContext("2d");
+  const metrics = getEditorTextMetrics();
+  context.font = metrics.font;
+  return context.measureText(text).width;
+}
+
+function getSourceRangeClientRect(source, start, end) {
+  const metrics = getEditorTextMetrics();
+  const startPos = getCursorLineAndColumn(source, start);
+  const lineStart = positionToIndex(source, startPos.line, 1);
+  const textToStart = source.slice(lineStart, start);
+  const textToEnd = source.slice(lineStart, end);
+  const editorRect = codeEditor.getBoundingClientRect();
+  const left = editorRect.left + metrics.paddingLeft + measureEditorTextWidth(textToStart) - codeEditor.scrollLeft;
+  const right = editorRect.left + metrics.paddingLeft + measureEditorTextWidth(textToEnd) - codeEditor.scrollLeft;
+  const top = editorRect.top + metrics.paddingTop + (startPos.line - 1) * metrics.lineHeight - codeEditor.scrollTop;
+  return {
+    left: left,
+    top: top,
+    right: right,
+    bottom: top + metrics.lineHeight,
+    width: Math.max(1, right - left),
+    height: metrics.lineHeight
+  };
+}
+
+function clampRectToEditor(rect) {
+  const editorRect = codeEditor.getBoundingClientRect();
+  const left = Math.min(Math.max(rect.left, editorRect.left + 4), Math.max(editorRect.left + 4, editorRect.right - 4));
+  const right = Math.min(Math.max(rect.right, left + 1), editorRect.right - 4);
+  const top = Math.min(Math.max(rect.top, editorRect.top + 4), Math.max(editorRect.top + 4, editorRect.bottom - 4));
+  return {
+    left: left,
+    top: top,
+    right: Math.max(right, left + 1),
+    bottom: top + rect.height,
+    width: Math.max(1, right - left),
+    height: rect.height
+  };
+}
+
+function positionColorPickerNearRect(rect) {
   colorPickerPopover.classList.remove("hidden");
   colorPickerPopover.hidden = false;
   const popWidth = colorPickerPopover.offsetWidth || 232;
   const popHeight = colorPickerPopover.offsetHeight || 280;
-  let left = rect.left;
+  let left = rect.right + 8;
   let top = rect.bottom + 6;
-  if (left < editorRight + 8) {
-    left = Math.max(editorRight + 8, rect.right - popWidth);
+  if (left + popWidth > window.innerWidth - 8) {
+    left = Math.max(8, rect.left - popWidth - 8);
+  }
+  if (left < 8) {
+    left = 8;
   }
   if (left + popWidth > window.innerWidth - 8) {
     left = Math.max(8, window.innerWidth - popWidth - 8);
@@ -931,26 +964,50 @@ function positionColorPicker(anchor) {
   if (top + popHeight > window.innerHeight - 8) {
     top = Math.max(8, rect.top - popHeight - 6);
   }
+  if (top < 8) {
+    top = 8;
+  }
   colorPickerPopover.style.left = Math.round(left) + "px";
   colorPickerPopover.style.top = Math.round(top) + "px";
 }
 
-function openColorPicker(targetName, opener) {
-  const literal = readConstStringLiteral(codeEditor.value, targetName);
-  const rgb = literal ? parseRgbLiteral(literal) : (targetName === "textColor" ? { r: 31, g: 41, b: 55 } : { r: 234, g: 243, b: 255 });
-  colorPickerTarget = targetName;
-  setColorPickerRgb(rgb.r, rgb.g, rgb.b, false);
-  backgroundColorOpener.setAttribute("aria-expanded", targetName === "backgroundColor" ? "true" : "false");
-  textColorOpener.setAttribute("aria-expanded", targetName === "textColor" ? "true" : "false");
-  positionColorPicker(opener);
-}
-
-function toggleColorPicker(targetName, opener) {
-  if (isColorPickerOpen() && colorPickerTarget === targetName) {
-    closeColorPicker();
+function positionColorPickerForTarget() {
+  if (!colorPickerTarget) {
     return;
   }
-  openColorPicker(targetName, opener);
+  const hit = findLearnerRgbLiteralByName(codeEditor.value, colorPickerTarget);
+  if (!hit) {
+    return;
+  }
+  const rawRect = getSourceRangeClientRect(codeEditor.value, hit.valueStart, hit.valueEnd);
+  positionColorPickerNearRect(clampRectToEditor(rawRect));
+}
+
+function openColorPicker(targetName) {
+  const hit = findLearnerRgbLiteralByName(codeEditor.value, targetName);
+  if (!hit) {
+    return;
+  }
+  colorPickerTarget = hit.name;
+  setColorPickerRgb(hit.rgb.r, hit.rgb.g, hit.rgb.b, false);
+  positionColorPickerForTarget();
+}
+
+function handleEditorCaretForColorPicker() {
+  if (editorWrap.classList.contains("is-composing") || applyingColorPicker) {
+    return;
+  }
+  if (document.activeElement !== codeEditor) {
+    return;
+  }
+  const hit = findLearnerRgbLiteralAtOffset(codeEditor.value, codeEditor.selectionStart);
+  if (!hit) {
+    if (isColorPickerOpen()) {
+      closeColorPicker();
+    }
+    return;
+  }
+  openColorPicker(hit.name);
 }
 
 function ratioFromPointer(event, element) {
@@ -1259,11 +1316,23 @@ function stopConsoleResize() {
 // イベント設定
 // ==================================================
 
-codeEditor.addEventListener("input", updateEditorView);
+codeEditor.addEventListener("input", function () {
+  updateEditorView();
+  handleEditorCaretForColorPicker();
+});
 codeEditor.addEventListener("scroll", syncEditorScroll);
-codeEditor.addEventListener("keyup", updateCursorStatus);
-codeEditor.addEventListener("click", updateCursorStatus);
-codeEditor.addEventListener("select", updateCursorStatus);
+codeEditor.addEventListener("keyup", function () {
+  updateCursorStatus();
+  handleEditorCaretForColorPicker();
+});
+codeEditor.addEventListener("click", function () {
+  updateCursorStatus();
+  handleEditorCaretForColorPicker();
+});
+codeEditor.addEventListener("select", function () {
+  updateCursorStatus();
+  handleEditorCaretForColorPicker();
+});
 codeEditor.addEventListener("compositionstart", function () {
   editorWrap.classList.add("is-composing");
 });
@@ -1275,22 +1344,20 @@ codeEditor.addEventListener("compositionend", function () {
 document.addEventListener("selectionchange", function () {
   if (document.activeElement === codeEditor) {
     updateCursorStatus();
+    handleEditorCaretForColorPicker();
   }
 });
-window.addEventListener("resize", syncEditorOverlay);
+window.addEventListener("resize", function () {
+  syncEditorOverlay();
+  if (isColorPickerOpen()) {
+    positionColorPickerForTarget();
+  }
+});
 if (typeof ResizeObserver === "function") {
   new ResizeObserver(syncEditorOverlay).observe(codeEditor);
 }
 runButton.addEventListener("click", applyCodeToPreview);
 resetCodeButton.addEventListener("click", resetCode);
-backgroundColorOpener.addEventListener("click", function (event) {
-  event.stopPropagation();
-  toggleColorPicker("backgroundColor", backgroundColorOpener);
-});
-textColorOpener.addEventListener("click", function (event) {
-  event.stopPropagation();
-  toggleColorPicker("textColor", textColorOpener);
-});
 colorPickerPopover.addEventListener("mousedown", function (event) {
   event.stopPropagation();
 });
@@ -1321,7 +1388,7 @@ document.addEventListener("mousedown", function (event) {
   if (!isColorPickerOpen()) {
     return;
   }
-  if (colorPickerPopover.contains(event.target) || backgroundColorOpener.contains(event.target) || textColorOpener.contains(event.target)) {
+  if (colorPickerPopover.contains(event.target) || event.target === codeEditor) {
     return;
   }
   closeColorPicker();
@@ -1403,6 +1470,10 @@ window.applyPickerRgbToCode = applyPickerRgbToCode;
 window.syncColorPickersFromCode = syncColorPickersFromCode;
 window.openColorPicker = openColorPicker;
 window.closeColorPicker = closeColorPicker;
+window.positionColorPickerForTarget = positionColorPickerForTarget;
+window.handleEditorCaretForColorPicker = handleEditorCaretForColorPicker;
+window.findLearnerRgbLiteralAtOffset = findLearnerRgbLiteralAtOffset;
+window.getSourceRangeClientRect = getSourceRangeClientRect;
 window.getStepEvidence = getStepEvidence;
 window.getColorPickerState = function () {
   return {
@@ -1410,7 +1481,9 @@ window.getColorPickerState = function () {
     target: colorPickerTarget,
     r: colorPickerRgb.r,
     g: colorPickerRgb.g,
-    b: colorPickerRgb.b
+    b: colorPickerRgb.b,
+    left: colorPickerPopover.style.left,
+    top: colorPickerPopover.style.top
   };
 };
 window.getCurrentStepProgress = function (stepNumber) {

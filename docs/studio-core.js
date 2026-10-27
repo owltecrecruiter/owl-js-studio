@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.2
+ * OWL JS Studio v0.9.3
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -114,10 +114,10 @@
     {
       number: 3,
       title: "STEP 3：背景色と文字色を変える",
-      description: "やること：背景色と文字色を、赤・緑・青の3つの数（RGB）で変えます。変える場所：`backgroundColor` と `textColor` の `rgb(赤, 緑, 青)`。手順：1) 0〜255の整数をコードに書く、またはアプリ内の色パレットで色とRGB数値を選ぶ 2) 実行する 3) タイトル画面と問題画面の両方を見る。確認：両方に同じ色が付いていればOK。パレットはコード編集の補助です。プレビューの色は実行後に変わります。読みにくい色なら警告が出ます。",
+      description: "やること：背景色と文字色を、赤・緑・青の3つの数（RGB）で変えます。変える場所：`backgroundColor` と `textColor` の `rgb(赤, 緑, 青)`。手順：1) 0〜255の整数をコードに書く、または RGBの数字をクリックすると色を選べます 2) 色パレットで色とRGB数値を選ぶ 3) 実行する 4) タイトル画面と問題画面の両方を見る。確認：両方に同じ色が付いていればOK。パレットはコード編集の補助です。プレビューの色は実行後に変わります。読みにくい色なら警告が出ます。",
       hints: [
         "`rgb(234, 243, 255)` は、赤234・緑243・青255 の光の混ぜ方です。どれも 0（光なし）〜255（最大）の整数だけ使えます。",
-        "右側の色パレットは、同じ `rgb(...)` をコードに書き込む補助です。パレット上のRGB数値も直接編集できます。学習コードでは HTMLやCSS、`#eaf3ff` のような16進数は使いません。",
+        "RGBの数字をクリックすると色を選べます。同じ `rgb(...)` をコードに書き込む補助です。パレット上のRGB数値も直接編集できます。学習コードでは HTMLやCSS、`#eaf3ff` のような16進数は使いません。",
         "実行後は「はじめる」で問題画面へ進み、色がタイトルと同じかも確認しましょう。"
       ]
     },
@@ -766,6 +766,43 @@
     return source.slice(span.valueStart, span.valueEnd);
   }
 
+  function findLearnerRgbLiteralByName(source, name) {
+    if (name !== "backgroundColor" && name !== "textColor") {
+      return null;
+    }
+    var span = findConstStringSpan(source, name);
+    if (span === null) {
+      return null;
+    }
+    var literal = source.slice(span.valueStart, span.valueEnd);
+    var rgb = parseRgbLiteral(literal);
+    if (rgb === null) {
+      return null;
+    }
+    return {
+      name: name,
+      literal: literal,
+      rgb: rgb,
+      valueStart: span.valueStart,
+      valueEnd: span.valueEnd
+    };
+  }
+
+  function findLearnerRgbLiteralAtOffset(source, offset) {
+    if (typeof source !== "string" || typeof offset !== "number" || !isFinite(offset)) {
+      return null;
+    }
+    var names = ["backgroundColor", "textColor"];
+    var i;
+    for (i = 0; i < names.length; i++) {
+      var hit = findLearnerRgbLiteralByName(source, names[i]);
+      if (hit && offset >= hit.valueStart && offset <= hit.valueEnd) {
+        return hit;
+      }
+    }
+    return null;
+  }
+
   function replaceConstStringLiteral(source, name, nextValue) {
     if (typeof nextValue !== "string") {
       return null;
@@ -1392,6 +1429,9 @@
     normalizeColor: normalizeColor,
     readConstStringLiteral: readConstStringLiteral,
     replaceConstStringLiteral: replaceConstStringLiteral,
+    findConstStringSpan: findConstStringSpan,
+    findLearnerRgbLiteralByName: findLearnerRgbLiteralByName,
+    findLearnerRgbLiteralAtOffset: findLearnerRgbLiteralAtOffset,
     createMakerCreditHtml: createMakerCreditHtml,
     isSafeCssColor: isSafeCssColor,
     getContrastWarning: getContrastWarning,
