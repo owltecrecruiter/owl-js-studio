@@ -20,3 +20,7 @@ agent-transcripts/
 !.gitignore
 !docs/
 !docs/**
+!gas/
+!gas/**
+!gas/admin/
+!gas/admin/**

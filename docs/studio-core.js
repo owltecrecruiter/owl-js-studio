@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.11
+ * OWL JS Studio v0.9.11 / interviewer issuance is a separate GAS admin app (v0.9.12)
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
