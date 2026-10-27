@@ -83,12 +83,14 @@
       </div>
 
       <div id="editor-wrap" class="editor-wrap furigana-off">
-        <pre id="line-numbers" class="line-numbers" aria-hidden="true">1</pre>
-        <pre id="furigana-gutter" class="furigana-gutter" aria-hidden="true"></pre>
-        <div class="code-area">
-          <pre id="highlight-layer" class="highlight-layer" aria-hidden="true"></pre>
-          <textarea id="code-editor" class="code-editor" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="編集できるJavaScriptコード"></textarea>
+        <div id="edit-surface" class="edit-surface">
+          <pre id="line-numbers" class="line-numbers" aria-hidden="true">1</pre>
+          <div class="code-area">
+            <pre id="highlight-layer" class="highlight-layer" aria-hidden="true"></pre>
+            <textarea id="code-editor" class="code-editor" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="編集できるJavaScriptコード"></textarea>
+          </div>
         </div>
+        <div id="furigana-view" class="furigana-view" hidden aria-hidden="true" role="region" aria-label="ふりがな付きコード。読み取り専用です。編集するときはふりがなをOFFにしてください。"></div>
       </div>
 
       <div id="console-resize" class="console-resize" role="separator" aria-orientation="horizontal" aria-label="コンソールの高さを変更"></div>
@@ -154,8 +156,22 @@
     <span id="status-cursor">Ln 1, Col 1</span>
     <span>JavaScript</span>
     <span>UTF-8</span>
-    <span>v0.9.4</span>
+    <span>v0.9.5</span>
   </footer>
+
+  <div id="reset-dialog" class="modal-overlay hidden" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-body">
+      <h2 id="reset-dialog-title">コードをリセットしますか？</h2>
+      <div id="reset-dialog-body">
+        <p>編集したコードを初期状態に戻します。</p>
+        <p>変更内容は失われ、元に戻すことはできません。</p>
+      </div>
+      <div class="modal-actions">
+        <button id="reset-cancel-button" class="sub-button" type="button">キャンセル</button>
+        <button id="reset-confirm-button" class="main-button" type="button">初期状態に戻す</button>
+      </div>
+    </div>
+  </div>
 
   <div id="color-picker-popover" class="color-picker-popover hidden" role="dialog" aria-label="色の選択" hidden>
     <div id="cp-sv" class="cp-sv">

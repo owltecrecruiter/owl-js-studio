@@ -8,6 +8,10 @@ const INITIAL_CODE = studioCore.INITIAL_CODE;
 const STEP_GUIDE = studioCore.STEP_GUIDE;
 const parseLearnerCode = studioCore.parseLearnerCode;
 const tokenize = studioCore.tokenize;
+const tokenizeForDisplay = studioCore.tokenizeForDisplay;
+const buildFuriganaModel = studioCore.buildFuriganaModel;
+const getFuriganaRuby = studioCore.getFuriganaRuby;
+const isCorrectIndexNumberToken = studioCore.isCorrectIndexNumberToken;
 const isIdentifierStart = studioCore.isIdentifierStart;
 const isIdentifierPart = studioCore.isIdentifierPart;
 const isDigit = studioCore.isDigit;
@@ -37,13 +41,16 @@ const createCodeHistory = studioCore.createCodeHistory;
 
 const codeEditor = document.getElementById("code-editor");
 const lineNumbers = document.getElementById("line-numbers");
-const furiganaGutter = document.getElementById("furigana-gutter");
+const furiganaView = document.getElementById("furigana-view");
 const highlightLayer = document.getElementById("highlight-layer");
 const editorWrap = document.getElementById("editor-wrap");
 const runButton = document.getElementById("run-button");
 const undoButton = document.getElementById("undo-button");
 const redoButton = document.getElementById("redo-button");
 const resetCodeButton = document.getElementById("reset-code-button");
+const resetDialog = document.getElementById("reset-dialog");
+const resetCancelButton = document.getElementById("reset-cancel-button");
+const resetConfirmButton = document.getElementById("reset-confirm-button");
 const consoleOutput = document.getElementById("console-output");
 const consolePanel = document.getElementById("console-panel");
 const consoleResize = document.getElementById("console-resize");
@@ -121,6 +128,8 @@ const HISTORY_COALESCE_MS = 400;
 let lastRunSourceCode = null;
 let lastRunWork = null;
 let confirmedNewCorrect = false;
+let furiganaHasBeenOn = false;
+let resetDialogLastFocus = null;
 const announcedStepClears = {
   1: false,
   2: false,
@@ -266,11 +275,33 @@ function updateEditorView() {
   syncColorPickersFromCode();
 }
 
+function isFuriganaOn() {
+  return furiganaToggle.checked === true;
+}
+
 function applyFuriganaMode() {
-  const enabled = furiganaToggle.checked === true;
+  const enabled = isFuriganaOn();
+  const wasOn = editorWrap.classList.contains("furigana-on");
   editorWrap.classList.toggle("furigana-on", enabled);
   editorWrap.classList.toggle("furigana-off", enabled === false);
   furiganaToggleLabel.textContent = enabled ? "ふりがな ON" : "ふりがな OFF";
+  codeEditor.readOnly = enabled;
+  if (enabled) {
+    furiganaHasBeenOn = true;
+    closeColorPicker();
+    furiganaView.hidden = false;
+    furiganaView.removeAttribute("hidden");
+    furiganaView.setAttribute("aria-hidden", "false");
+    renderFuriganaView(codeEditor.value);
+    if (wasOn === false) {
+      announceNewlyCompletedSteps();
+    }
+  } else {
+    furiganaView.hidden = true;
+    furiganaView.setAttribute("hidden", "");
+    furiganaView.setAttribute("aria-hidden", "true");
+    clearChildren(furiganaView);
+  }
 }
 
 function updateLineNumbers() {
@@ -290,11 +321,9 @@ function syncEditorOverlay() {
   highlightLayer.style.right = barX + "px";
   highlightLayer.style.bottom = barY + "px";
   lineNumbers.style.marginBottom = barY + "px";
-  furiganaGutter.style.marginBottom = barY + "px";
   highlightLayer.scrollTop = codeEditor.scrollTop;
   highlightLayer.scrollLeft = codeEditor.scrollLeft;
   lineNumbers.scrollTop = codeEditor.scrollTop;
-  furiganaGutter.scrollTop = codeEditor.scrollTop;
 }
 
 function syncEditorScroll() {
@@ -507,10 +536,10 @@ function updateLearningSupport() {
 
 function renderEditorHighlight(source) {
   clearChildren(highlightLayer);
-  clearChildren(furiganaGutter);
 
   const lines = source.split("\n");
-  const tokensByLine = groupTokensByLine(tokenizeForFurigana(source));
+  const tokens = tokenizeForFurigana(source);
+  const tokensByLine = groupTokensByLine(tokens);
   const focusLines = getStepFocusLines(latestParsedSupportData, currentStep);
 
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
@@ -518,7 +547,6 @@ function renderEditorHighlight(source) {
     lineRow.className = focusLines.indexOf(lineIndex + 1) !== -1 ? "hl-line hl-line-focus" : "hl-line";
     const lineTokens = tokensByLine[lineIndex + 1] || [];
     let column = 1;
-    const meanings = [];
 
     for (let i = 0; i < lineTokens.length; i++) {
       const token = lineTokens[i];
@@ -526,11 +554,7 @@ function renderEditorHighlight(source) {
         lineRow.appendChild(document.createTextNode(lines[lineIndex].slice(column - 1, token.column - 1)));
       }
 
-      const meaning = describeToken(token);
-      if (shouldShowFurigana(token)) {
-        pushUniqueMeaning(meanings, meaning.short);
-      }
-      lineRow.appendChild(createHighlightTokenSpan(token, meaning));
+      lineRow.appendChild(createHighlightTokenSpan(token, describeToken(token, tokens, token.index)));
       column = token.column + token.value.length;
     }
 
@@ -539,23 +563,63 @@ function renderEditorHighlight(source) {
     }
 
     highlightLayer.appendChild(lineRow);
+  }
 
-    const gutterRow = document.createElement("div");
-    gutterRow.className = "fg-line";
-    gutterRow.textContent = meanings.join(" ") || " ";
-    gutterRow.title = meanings.join(" ");
-    furiganaGutter.appendChild(gutterRow);
+  if (isFuriganaOn()) {
+    renderFuriganaView(source);
   }
 }
 
-function shouldShowFurigana(token) {
-  return token.type === "keyword" || token.type === "operator" || token.type === "identifier" || token.type === "number" || token.type === "comment";
-}
+function renderFuriganaView(source) {
+  const model = buildFuriganaModel(source);
+  const focusLines = getStepFocusLines(latestParsedSupportData, currentStep);
+  const fragment = document.createDocumentFragment();
 
-function pushUniqueMeaning(meanings, shortMeaning) {
-  if (meanings.indexOf(shortMeaning) === -1) {
-    meanings.push(shortMeaning);
+  for (let i = 0; i < model.length; i++) {
+    const line = model[i];
+    const row = document.createElement("div");
+    row.className = focusLines.indexOf(line.lineNumber) !== -1 ? "fg-row fg-row-focus" : "fg-row";
+
+    const lineno = document.createElement("div");
+    lineno.className = "fg-lineno";
+    lineno.textContent = String(line.lineNumber);
+    row.appendChild(lineno);
+
+    const unitsWrap = document.createElement("div");
+    unitsWrap.className = "fg-units";
+
+    for (let u = 0; u < line.units.length; u++) {
+      const unit = line.units[u];
+      if (unit.kind === "space") {
+        const space = document.createElement("span");
+        space.className = "fg-space";
+        space.textContent = unit.text;
+        unitsWrap.appendChild(space);
+      } else {
+        const col = document.createElement("span");
+        col.className = unit.ruby ? "fg-unit" : "fg-unit fg-unit-bare";
+        col.setAttribute("data-token", unit.text);
+        if (unit.ruby) {
+          col.setAttribute("data-ruby", unit.ruby);
+          const ruby = document.createElement("span");
+          ruby.className = "fg-ruby";
+          ruby.textContent = unit.ruby;
+          col.appendChild(ruby);
+        }
+        const tok = document.createElement("span");
+        tok.className = "fg-token token-" + getTokenClassName({ type: unit.type, value: unit.text });
+        tok.textContent = unit.text;
+        col.appendChild(tok);
+        unitsWrap.appendChild(col);
+      }
+    }
+
+    row.appendChild(unitsWrap);
+    fragment.appendChild(row);
   }
+
+  clearChildren(furiganaView);
+  furiganaView.appendChild(fragment);
 }
 
 function createHighlightTokenSpan(token, meaning) {
@@ -579,118 +643,20 @@ function groupTokensByLine(tokens) {
 }
 
 function tokenizeForFurigana(source) {
-  const tokens = [];
-  let index = 0;
-  let line = 1;
-  let column = 1;
-
-  while (index < source.length) {
-    const char = source[index];
-    const next = source[index + 1];
-
-    if (char === " " || char === "\t" || char === "\r") {
-      advance(char);
-    } else if (char === "\n") {
-      advance(char);
-    } else if (char === "/" && next === "/") {
-      readLineComment();
-    } else if (char === "\"") {
-      readDisplayString();
-    } else if (isDigit(char)) {
-      readDisplayNumber();
-    } else if (isIdentifierStart(char)) {
-      readDisplayIdentifier();
-    } else if (char === "=" && source[index + 1] === "=" && source[index + 2] === "=") {
-      pushToken("operator", "===", line, column);
-      advance("=");
-      advance("=");
-      advance("=");
-    } else if ("=;(){}".indexOf(char) !== -1) {
-      pushToken("punctuation", char, line, column);
-      advance(char);
-    } else {
-      advance(char);
-    }
+  const tokens = tokenizeForDisplay(source);
+  for (let i = 0; i < tokens.length; i++) {
+    tokens[i].index = i;
   }
-
   return tokens;
-
-  function pushToken(type, value, tokenLine, tokenColumn) {
-    tokens.push({
-      type: type,
-      value: value,
-      line: tokenLine,
-      column: tokenColumn
-    });
-  }
-
-  function advance(currentChar) {
-    index = index + 1;
-    if (currentChar === "\n") {
-      line = line + 1;
-      column = 1;
-    } else {
-      column = column + 1;
-    }
-  }
-
-  function readLineComment() {
-    const startIndex = index;
-    const startLine = line;
-    const startColumn = column;
-    while (index < source.length && source[index] !== "\n") {
-      advance(source[index]);
-    }
-    pushToken("comment", source.slice(startIndex, index), startLine, startColumn);
-  }
-
-  function readDisplayString() {
-    const startIndex = index;
-    const startLine = line;
-    const startColumn = column;
-    advance("\"");
-    while (index < source.length) {
-      const current = source[index];
-      if (current === "\\" && index + 1 < source.length) {
-        advance(current);
-        advance(source[index]);
-      } else if (current === "\"") {
-        advance(current);
-        break;
-      } else {
-        advance(current);
-      }
-    }
-    pushToken("string", source.slice(startIndex, index), startLine, startColumn);
-  }
-
-  function readDisplayNumber() {
-    const startIndex = index;
-    const startLine = line;
-    const startColumn = column;
-    while (index < source.length && isDigit(source[index])) {
-      advance(source[index]);
-    }
-    pushToken("number", source.slice(startIndex, index), startLine, startColumn);
-  }
-
-  function readDisplayIdentifier() {
-    const startIndex = index;
-    const startLine = line;
-    const startColumn = column;
-    while (index < source.length && isIdentifierPart(source[index])) {
-      advance(source[index]);
-    }
-    const value = source.slice(startIndex, index);
-    pushToken(value === "const" || value === "if" || value === "else" ? "keyword" : "identifier", value, startLine, startColumn);
-  }
 }
 
 function getStepEvidence() {
   return {
     lastRunWork: lastRunWork,
     editorMatchesLastRun: lastRunSourceCode !== null && lastRunSourceCode === codeEditor.value,
-    confirmedNewCorrect: confirmedNewCorrect === true
+    confirmedNewCorrect: confirmedNewCorrect === true,
+    furiganaOn: isFuriganaOn(),
+    furiganaHasBeenOn: furiganaHasBeenOn === true
   };
 }
 
@@ -749,7 +715,9 @@ function renderHints() {
   hintButton.textContent = revealedCount >= step.hints.length ? "ヒントはすべて表示済み" : "ヒントを見る";
 }
 
-function describeToken(token) {
+function describeToken(token, tokens, tokenIndex) {
+  const ruby = Array.isArray(tokens) ? getFuriganaRuby(tokens, tokenIndex) : null;
+
   if (token.type === "comment") {
     return {
       short: "メモ",
@@ -760,18 +728,18 @@ function describeToken(token) {
   if (token.type === "keyword") {
     if (token.value === "const") {
       return {
-        short: "定数",
+        short: ruby || "定数を作る",
         detail: "`const` は、名前を付けて値を用意するためのキーワードです。ここでは定数として扱います。"
       };
     }
     if (token.value === "if") {
       return {
-        short: "もし",
+        short: ruby || "もし",
         detail: "`if` は、条件が合うときだけ中の処理を行うためのキーワードです。"
       };
     }
     return {
-      short: "そうでなければ",
+      short: ruby || "そうでなければ",
       detail: "`else` は、`if` の条件が合わなかったときの処理を書くためのキーワードです。"
     };
   }
@@ -788,15 +756,21 @@ function describeToken(token) {
   }
 
   if (token.type === "number") {
+    if (Array.isArray(tokens) && isCorrectIndexNumberToken(tokens, tokenIndex)) {
+      return {
+        short: ruby,
+        detail: "`" + token.value + "` は正解の選択肢番号です。0が1番目、1が2番目、2が3番目です。"
+      };
+    }
     return {
-      short: "番号",
-      detail: "`" + token.value + "` は選択肢の番号です。1番目は0、2番目は1、3番目は2として扱います。"
+      short: "数",
+      detail: "`" + token.value + "` は数値です。RGBの光の量などにも使います。"
     };
   }
 
   if (token.type === "operator") {
     return {
-      short: "等しい",
+      short: ruby || "等しい",
       detail: "`===` は、左と右が同じ値かどうかを比べる記号です。"
     };
   }
@@ -807,7 +781,7 @@ function describeToken(token) {
 function describePunctuation(value) {
   const punctuationMeanings = {
     "=": {
-      short: "入れる",
+      short: "代入する",
       detail: "`=` は、右側の値を左側の名前に入れる記号です。"
     },
     ";": {
@@ -1399,6 +1373,72 @@ function restartQuiz() {
   startQuiz();
 }
 
+function isResetDialogOpen() {
+  return resetDialog.hidden !== true && resetDialog.classList.contains("hidden") === false;
+}
+
+function openResetDialog() {
+  if (isResetDialogOpen()) {
+    resetCancelButton.focus();
+    return;
+  }
+  resetDialogLastFocus = document.activeElement;
+  resetDialog.hidden = false;
+  resetDialog.removeAttribute("hidden");
+  resetDialog.classList.remove("hidden");
+  resetCancelButton.focus();
+}
+
+function closeResetDialog() {
+  if (isResetDialogOpen() === false) {
+    return;
+  }
+  resetDialog.hidden = true;
+  resetDialog.setAttribute("hidden", "");
+  resetDialog.classList.add("hidden");
+  if (resetDialogLastFocus && typeof resetDialogLastFocus.focus === "function") {
+    resetDialogLastFocus.focus();
+  }
+  resetDialogLastFocus = null;
+}
+
+function confirmResetCode() {
+  closeResetDialog();
+  resetCode();
+}
+
+function cancelResetCode() {
+  closeResetDialog();
+}
+
+function handleResetDialogKeydown(event) {
+  if (isResetDialogOpen() === false) {
+    return false;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    cancelResetCode();
+    return true;
+  }
+  if (event.key !== "Tab") {
+    return false;
+  }
+  const first = resetCancelButton;
+  const last = resetConfirmButton;
+  if (event.shiftKey) {
+    if (document.activeElement === first || resetDialog.contains(document.activeElement) === false) {
+      event.preventDefault();
+      last.focus();
+      return true;
+    }
+  } else if (document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+    return true;
+  }
+  return false;
+}
+
 function resetCode() {
   setEditorCode(INITIAL_CODE);
   resetEditorHistoryBaseline();
@@ -1460,6 +1500,7 @@ function jumpEditorToStepFocus(parsed) {
 function findTokenAtCursor(source, cursorIndex) {
   const tokens = tokenizeForFurigana(source);
   let matched = null;
+  let matchedIndex = -1;
 
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
@@ -1467,6 +1508,7 @@ function findTokenAtCursor(source, cursorIndex) {
     const end = start + token.value.length;
     if (cursorIndex >= start && cursorIndex <= end) {
       matched = token;
+      matchedIndex = i;
       break;
     }
     if (start > cursorIndex) {
@@ -1474,7 +1516,11 @@ function findTokenAtCursor(source, cursorIndex) {
     }
   }
 
-  return matched;
+  return {
+    token: matched,
+    tokens: tokens,
+    index: matchedIndex
+  };
 }
 
 function updateCursorStatus() {
@@ -1482,15 +1528,15 @@ function updateCursorStatus() {
   const cursor = getCursorLineAndColumn(source, codeEditor.selectionStart);
   statusCursor.textContent = "Ln " + cursor.line + ", Col " + cursor.column;
 
-  const token = findTokenAtCursor(source, codeEditor.selectionStart);
-  if (token === null) {
+  const found = findTokenAtCursor(source, codeEditor.selectionStart);
+  if (found.token === null) {
     statusToken.textContent = "コードの意味";
     tokenDetail.textContent = "カーソル位置の部品の意味がここに表示されます。";
     return;
   }
 
-  const meaning = describeToken(token);
-  statusToken.textContent = token.value + " = " + meaning.short;
+  const meaning = describeToken(found.token, found.tokens, found.index);
+  statusToken.textContent = found.token.value + " = " + meaning.short;
   tokenDetail.textContent = meaning.detail;
 }
 
@@ -1585,7 +1631,9 @@ if (typeof ResizeObserver === "function") {
 runButton.addEventListener("click", applyCodeToPreview);
 undoButton.addEventListener("click", undoEditorHistory);
 redoButton.addEventListener("click", redoEditorHistory);
-resetCodeButton.addEventListener("click", resetCode);
+resetCodeButton.addEventListener("click", openResetDialog);
+resetCancelButton.addEventListener("click", cancelResetCode);
+resetConfirmButton.addEventListener("click", confirmResetCode);
 colorPickerPopover.addEventListener("mousedown", function (event) {
   event.stopPropagation();
 });
@@ -1629,10 +1677,16 @@ document.addEventListener("mousedown", function (event) {
   closeColorPicker();
 });
 document.addEventListener("keydown", function (event) {
+  if (handleResetDialogKeydown(event)) {
+    return;
+  }
   if (event.key === "Escape" && isColorPickerOpen()) {
     closeColorPicker();
   }
   if (event.isComposing || event.keyCode === 229 || isEditorComposing()) {
+    return;
+  }
+  if (isResetDialogOpen()) {
     return;
   }
   const historyAction = undoRedoActionFromEvent(event);
@@ -1763,3 +1817,12 @@ window.getCurrentStepProgress = function (stepNumber) {
   }
   return evaluateStepProgress(parsed, stepNumber || currentStep, parseError, initialQuizSnapshot, getStepEvidence());
 };
+window.resetCode = resetCode;
+window.openResetDialog = openResetDialog;
+window.closeResetDialog = closeResetDialog;
+window.confirmResetCode = confirmResetCode;
+window.cancelResetCode = cancelResetCode;
+window.isResetDialogOpen = isResetDialogOpen;
+window.isFuriganaOn = isFuriganaOn;
+window.buildFuriganaModel = buildFuriganaModel;
+window.renderFuriganaView = renderFuriganaView;

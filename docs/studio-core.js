@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.4
+ * OWL JS Studio v0.9.5
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -94,11 +94,11 @@
     {
       number: 1,
       title: "STEP 1：プログラムを読む",
-      description: "やること：ふりがなをONにして、コードを上から読みます。変える場所：まだありません。手順：1) ふりがなON 2) if=もし、else=そうでなければ、const=定数 を探す。確認：意味ラベルが読めたらOK。コードは変えなくて大丈夫です。",
+      description: "やること：ふりがなをONにして、コードを上から読みます。読むときはON、編集するときはOFFにします。変える場所：まだありません。手順：1) ふりがなON 2) 各単語の上の意味を見る（const=定数を作る、if=もし、else=そうでなければ）。確認：ふりがなONでコードが読めたらOK。コードは変えなくて大丈夫です。",
       hints: [
-        "`const` は「定数」です。名前を付けて値を入れておく合図です。",
-        "`if` は「もし」、`else` は「そうでなければ」です。選んだ番号と正解番号を比べています。",
-        "ふりがなONのまま、`gameTitle` や `question1` の名前の意味も見てみましょう。"
+        "ふりがなONは読み取り専用です。コードを直すときはOFFに戻します。",
+        "`const` は「定数を作る」、`if` は「もし」、`else` は「そうでなければ」です。意味は単語の真上に出ます。",
+        "`gameTitle` や `question1` など、長い名前の上にも日本語の意味が付きます。"
       ]
     },
     {
@@ -305,6 +305,238 @@
         column: startColumn
       };
     }
+  }
+
+  function tokenizeForDisplay(source) {
+    var text = typeof source === "string" ? source : "";
+    var tokens = [];
+    var index = 0;
+    var line = 1;
+    var column = 1;
+
+    while (index < text.length) {
+      var char = text[index];
+      var next = text[index + 1];
+
+      if (char === " " || char === "\t" || char === "\r") {
+        advance(char);
+      } else if (char === "\n") {
+        advance(char);
+      } else if (char === "/" && next === "/") {
+        readRawUntilNewline("comment");
+      } else if (char === "\"") {
+        readDisplayString();
+      } else if (isDigit(char)) {
+        readRawWhile(isDigit, "number");
+      } else if (isIdentifierStart(char)) {
+        readDisplayIdentifier();
+      } else if (char === "=" && text[index + 1] === "=" && text[index + 2] === "=") {
+        pushToken("operator", "===", line, column);
+        advance("=");
+        advance("=");
+        advance("=");
+      } else if ("=;(){},".indexOf(char) !== -1) {
+        pushToken("punctuation", char, line, column);
+        advance(char);
+      } else {
+        pushToken("unknown", char, line, column);
+        advance(char);
+      }
+    }
+
+    return tokens;
+
+    function pushToken(type, value, tokenLine, tokenColumn) {
+      tokens.push({
+        type: type,
+        value: value,
+        line: tokenLine,
+        column: tokenColumn
+      });
+    }
+
+    function advance(currentChar) {
+      index = index + 1;
+      if (currentChar === "\n") {
+        line = line + 1;
+        column = 1;
+      } else {
+        column = column + 1;
+      }
+    }
+
+    function readRawUntilNewline(type) {
+      var startIndex = index;
+      var startLine = line;
+      var startColumn = column;
+      while (index < text.length && text[index] !== "\n") {
+        advance(text[index]);
+      }
+      pushToken(type, text.slice(startIndex, index), startLine, startColumn);
+    }
+
+    function readRawWhile(predicate, type) {
+      var startIndex = index;
+      var startLine = line;
+      var startColumn = column;
+      while (index < text.length && predicate(text[index])) {
+        advance(text[index]);
+      }
+      pushToken(type, text.slice(startIndex, index), startLine, startColumn);
+    }
+
+    function readDisplayString() {
+      var startIndex = index;
+      var startLine = line;
+      var startColumn = column;
+      advance("\"");
+      while (index < text.length) {
+        var current = text[index];
+        if (current === "\n") {
+          break;
+        }
+        if (current === "\\" && index + 1 < text.length && text[index + 1] !== "\n") {
+          advance(current);
+          advance(text[index]);
+        } else if (current === "\"") {
+          advance(current);
+          break;
+        } else {
+          advance(current);
+        }
+      }
+      pushToken("string", text.slice(startIndex, index), startLine, startColumn);
+    }
+
+    function readDisplayIdentifier() {
+      var startIndex = index;
+      var startLine = line;
+      var startColumn = column;
+      while (index < text.length && isIdentifierPart(text[index])) {
+        advance(text[index]);
+      }
+      var value = text.slice(startIndex, index);
+      pushToken(value === "const" || value === "if" || value === "else" ? "keyword" : "identifier", value, startLine, startColumn);
+    }
+  }
+
+  function isCorrectIndexNumberToken(tokens, index) {
+    var token = tokens[index];
+    var operator;
+    var identifier;
+    if (!token || token.type !== "number") {
+      return false;
+    }
+    if (token.value !== "0" && token.value !== "1" && token.value !== "2") {
+      return false;
+    }
+    operator = tokens[index - 1];
+    identifier = tokens[index - 2];
+    return !!(
+      operator &&
+      operator.type === "operator" &&
+      operator.value === "===" &&
+      identifier &&
+      identifier.type === "identifier" &&
+      /^selectedIndex[123]$/.test(identifier.value)
+    );
+  }
+
+  function getFuriganaRuby(tokens, index) {
+    var token = tokens[index];
+    var ident;
+    if (!token) {
+      return null;
+    }
+    if (token.type === "keyword") {
+      if (token.value === "const") {
+        return "定数を作る";
+      }
+      if (token.value === "if") {
+        return "もし";
+      }
+      if (token.value === "else") {
+        return "そうでなければ";
+      }
+      return null;
+    }
+    if (token.type === "operator" && token.value === "===") {
+      return "等しい";
+    }
+    if (token.type === "punctuation" && token.value === "=") {
+      return "代入する";
+    }
+    if (token.type === "number") {
+      if (isCorrectIndexNumberToken(tokens, index) !== true) {
+        return null;
+      }
+      if (token.value === "0") {
+        return "1番目";
+      }
+      if (token.value === "1") {
+        return "2番目";
+      }
+      return "3番目";
+    }
+    if (token.type !== "identifier") {
+      return null;
+    }
+    ident = describeIdentifier(token.value);
+    if (token.value === "gameTitle" || token.value === "backgroundColor" || token.value === "textColor") {
+      return ident.short;
+    }
+    if (/^question[123]$/.test(token.value) || /^choice[123]_[123]$/.test(token.value) || /^selectedIndex[123]$/.test(token.value) || /^result[123]$/.test(token.value)) {
+      return ident.short;
+    }
+    return null;
+  }
+
+  function buildFuriganaModel(source) {
+    var text = typeof source === "string" ? source : "";
+    var lines = text.split("\n");
+    var tokens = tokenizeForDisplay(text);
+    var result = [];
+    var tokenIndex = 0;
+    var i;
+
+    for (i = 0; i < lines.length; i++) {
+      var lineNumber = i + 1;
+      var lineText = lines[i];
+      var units = [];
+      var column = 1;
+
+      while (tokenIndex < tokens.length && tokens[tokenIndex].line === lineNumber) {
+        var token = tokens[tokenIndex];
+        if (token.column > column) {
+          units.push({
+            kind: "space",
+            text: lineText.slice(column - 1, token.column - 1)
+          });
+        }
+        units.push({
+          kind: "token",
+          text: token.value,
+          type: token.type,
+          ruby: getFuriganaRuby(tokens, tokenIndex)
+        });
+        column = token.column + token.value.length;
+        tokenIndex = tokenIndex + 1;
+      }
+
+      if (column <= lineText.length) {
+        units.push({
+          kind: "space",
+          text: lineText.slice(column - 1)
+        });
+      }
+
+      result.push({
+        lineNumber: lineNumber,
+        units: units
+      });
+    }
+
+    return result;
   }
 
   function parseLearnerCode(source) {
@@ -1059,9 +1291,13 @@
     }
 
     if (stepNumber === 1) {
+      var step1Evidence = evidence || {};
+      var furiganaSeen = step1Evidence.furiganaOn === true || step1Evidence.furiganaHasBeenOn === true;
       return {
-        done: true,
-        message: "達成：コードを解析できました。ふりがなONで if=もし、else=そうでなければ、const=定数 を確認しましょう。"
+        done: furiganaSeen,
+        message: furiganaSeen
+          ? "達成：ふりがなONでコードの意味を確認しました。編集するときはOFFにします。"
+          : "未達成：ふりがなをONにして、各単語の上の意味を読みましょう。編集するときはOFFにします。"
       };
     }
 
@@ -1176,7 +1412,7 @@
   function describeIdentifier(value) {
     if (value === "gameTitle") {
       return {
-        short: "タイトル",
+        short: "ゲームタイトル",
         detail: "`gameTitle` は、タイトル画面に出すゲームの名前です。"
       };
     }
@@ -1196,14 +1432,14 @@
     var questionMatch = value.match(/^question([123])$/);
     if (questionMatch !== null) {
       return {
-        short: "問題文",
+        short: "第" + questionMatch[1] + "問の問題文",
         detail: "`" + value + "` は、第" + questionMatch[1] + "問の問題文を入れる名前です。"
       };
     }
     var choiceMatch = value.match(/^choice([123])_([123])$/);
     if (choiceMatch !== null) {
       return {
-        short: "選択肢",
+        short: "第" + choiceMatch[1] + "問の選択肢" + choiceMatch[2],
         detail: "`" + value + "` は、第" + choiceMatch[1] + "問の" + choiceMatch[2] + "番目の選択肢を入れる名前です。"
       };
     }
@@ -1557,6 +1793,10 @@
     STEP_GUIDE: STEP_GUIDE,
     STEP_FOCUS_NAMES: STEP_FOCUS_NAMES,
     tokenize: tokenize,
+    tokenizeForDisplay: tokenizeForDisplay,
+    getFuriganaRuby: getFuriganaRuby,
+    isCorrectIndexNumberToken: isCorrectIndexNumberToken,
+    buildFuriganaModel: buildFuriganaModel,
     parseLearnerCode: parseLearnerCode,
     isAllowedConstName: isAllowedConstName,
     isIdentifierStart: isIdentifierStart,

@@ -230,7 +230,7 @@ button {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 0 8px;
   min-height: 35px;
   background: var(--sidebar-bg);
   border-bottom: 1px solid var(--border);
@@ -272,20 +272,28 @@ button {
 }
 
 .editor-wrap {
-  display: grid;
-  grid-template-columns: 46px minmax(0, 1fr);
+  display: flex;
   flex: 1;
   min-height: 240px;
+  min-width: 0;
   overflow: hidden;
   background: var(--editor-bg);
 }
 
-.editor-wrap.furigana-on {
-  grid-template-columns: 46px 108px minmax(0, 1fr);
+.edit-surface {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-wrap.furigana-on .edit-surface {
+  display: none;
 }
 
 .line-numbers,
-.furigana-gutter,
 .highlight-layer,
 .code-editor {
   margin: 0;
@@ -307,8 +315,7 @@ button {
   overflow-wrap: normal;
 }
 
-.line-numbers,
-.furigana-gutter {
+.line-numbers {
   overflow: hidden;
   padding: var(--editor-pad-y) 0;
   user-select: none;
@@ -322,7 +329,6 @@ button {
 }
 
 .line-numbers span,
-.furigana-gutter .fg-line,
 .hl-line {
   display: block;
   height: var(--editor-line-height);
@@ -336,23 +342,101 @@ button {
   padding-right: 8px;
 }
 
-.furigana-gutter {
+.furigana-view {
   display: none;
-  color: #dcdcaa;
-  background: #243044;
-  border-right: 1px solid var(--border);
-  font-family: "Yu Gothic", "Meiryo", sans-serif;
-  font-size: 10px;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--editor-bg);
 }
 
-.editor-wrap.furigana-on .furigana-gutter {
+.editor-wrap.furigana-on .furigana-view {
   display: block;
 }
 
-.furigana-gutter .fg-line {
-  padding: 0 6px;
-  text-overflow: ellipsis;
+.editor-wrap.furigana-off .furigana-view,
+.furigana-view[hidden] {
+  display: none !important;
+}
+
+.fg-row {
+  display: flex;
+  align-items: flex-end;
+  min-height: 40px;
+  padding: 4px 0 2px;
+}
+
+.fg-row-focus {
+  background: rgba(14, 99, 156, 0.18);
+}
+
+.fg-lineno {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex: 0 0 46px;
+  align-self: stretch;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 0 8px 0 0;
+  color: #858585;
+  background: var(--editor-bg);
+  border-right: 1px solid var(--border);
+  font-family: var(--editor-font);
+  font-size: var(--editor-font-size);
+  line-height: var(--editor-line-height);
+  user-select: none;
+}
+
+.fg-units {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  min-width: max-content;
+  padding: 0 var(--editor-pad-x);
+}
+
+.fg-space {
+  white-space: pre;
+  font-family: var(--editor-font);
+  font-size: var(--editor-font-size);
+  line-height: var(--editor-line-height);
+  height: var(--editor-line-height);
+}
+
+.fg-unit {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  margin-right: 6px;
+}
+
+.fg-unit-bare {
+  margin-right: 0;
+  align-items: flex-start;
+}
+
+.fg-ruby {
+  padding: 0 1px;
+  color: #e2c08d;
+  font-family: "Yu Gothic", "Meiryo", sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  letter-spacing: 0;
+  text-align: center;
   white-space: nowrap;
+}
+
+.fg-token {
+  white-space: pre;
+  font-family: var(--editor-font);
+  font-size: var(--editor-font-size);
+  font-weight: 400;
+  line-height: var(--editor-line-height);
+  letter-spacing: 0;
 }
 
 .code-area {
@@ -509,7 +593,7 @@ button {
   flex-direction: column;
   flex: 2 1 0;
   min-width: 456px;
-  background: var(--sidebar-bg);
+  background: #1b2433;
   border-left: 1px solid var(--border);
 }
 
@@ -517,10 +601,12 @@ button {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: 0;
   min-height: 35px;
-  padding: 6px 12px;
+  padding: 4px 12px;
+  background: var(--chrome-bg);
   border-bottom: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
 }
 
 .preview-heading h2 {
@@ -665,13 +751,15 @@ button {
 
 .preview-card {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   flex: 1;
   min-height: 0;
-  padding: 12px;
+  padding: 8px 12px 12px;
   overflow: auto;
-  background: #1e1e1e;
+  background:
+    linear-gradient(180deg, rgba(43, 127, 193, 0.08), transparent 48px),
+    #252e3c;
 }
 
 .title-screen,
@@ -679,7 +767,7 @@ button {
 .result-screen {
   width: 100%;
   max-width: 480px;
-  padding: 18px 18px 16px;
+  padding: 16px 16px 14px;
   text-align: left;
   color: #1f2937;
   background: #ffffff;
@@ -688,7 +776,6 @@ button {
 
 .title-screen {
   text-align: center;
-  padding: 22px 20px 18px;
 }
 
 .quiz-kicker {
@@ -877,6 +964,13 @@ button {
   background: var(--accent);
 }
 
+.main-button:disabled {
+  color: #9aa8b8;
+  background: #314056;
+  cursor: default;
+  opacity: 0.55;
+}
+
 .sub-button {
   padding: 5px 12px;
   color: var(--text);
@@ -893,7 +987,7 @@ button {
   background: #243044;
   border-color: var(--border);
   cursor: default;
-  opacity: 0.55;
+  opacity: 0.45;
 }
 
 .icon-button {
@@ -918,6 +1012,60 @@ button {
   background: #2b3848;
   border: 1px solid #3d4d61;
   white-space: nowrap;
+}
+
+.editor-wrap.furigana-on ~ .console-resize {
+  border-top-color: var(--accent);
+}
+
+.step-button.complete:not(.active) {
+  box-shadow: inset 2px 0 0 #4b7a4b;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(12, 18, 28, 0.62);
+}
+
+.modal-overlay.hidden,
+.modal-overlay[hidden] {
+  display: none;
+}
+
+.modal-card {
+  width: min(420px, 100%);
+  padding: 16px 16px 14px;
+  color: var(--text);
+  background: var(--sidebar-bg);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--accent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.modal-card h2 {
+  margin: 0 0 10px;
+  color: #f8fafc;
+  font-size: 15px;
+}
+
+.modal-card p {
+  margin: 0 0 6px;
+  color: #d4d4d4;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
 }
 
 .token-detail {
