@@ -29,6 +29,7 @@ const readConstStringLiteral = studioCore.readConstStringLiteral;
 const replaceConstStringLiteral = studioCore.replaceConstStringLiteral;
 const findLearnerRgbLiteralByName = studioCore.findLearnerRgbLiteralByName;
 const findLearnerRgbLiteralAtOffset = studioCore.findLearnerRgbLiteralAtOffset;
+const createCodeHistory = studioCore.createCodeHistory;
 
 // ==================================================
 // 画面要素
@@ -40,6 +41,8 @@ const furiganaGutter = document.getElementById("furigana-gutter");
 const highlightLayer = document.getElementById("highlight-layer");
 const editorWrap = document.getElementById("editor-wrap");
 const runButton = document.getElementById("run-button");
+const undoButton = document.getElementById("undo-button");
+const redoButton = document.getElementById("redo-button");
 const resetCodeButton = document.getElementById("reset-code-button");
 const consoleOutput = document.getElementById("console-output");
 const consolePanel = document.getElementById("console-panel");
@@ -111,6 +114,10 @@ let currentStep = 1;
 let consoleResizeState = null;
 let guideIsOpen = false;
 let applyingColorPicker = false;
+let applyingHistory = false;
+const editorHistory = createCodeHistory({ cap: 100 });
+let historyCoalesceTimer = null;
+const HISTORY_COALESCE_MS = 400;
 let lastRunSourceCode = null;
 let lastRunWork = null;
 let confirmedNewCorrect = false;
@@ -138,6 +145,111 @@ const revealedHintCounts = {
 // ==================================================
 // 疑似IDEの表示制御
 // ==================================================
+
+function captureEditorSnapshot() {
+  return {
+    value: codeEditor.value,
+    start: codeEditor.selectionStart,
+    end: codeEditor.selectionEnd,
+    scrollTop: codeEditor.scrollTop
+  };
+}
+
+function isEditorComposing() {
+  return editorWrap.classList.contains("is-composing");
+}
+
+function clearHistoryCoalesceTimer() {
+  if (historyCoalesceTimer !== null) {
+    clearTimeout(historyCoalesceTimer);
+    historyCoalesceTimer = null;
+  }
+}
+
+function scheduleHistoryFlush() {
+  clearHistoryCoalesceTimer();
+  historyCoalesceTimer = setTimeout(function () {
+    historyCoalesceTimer = null;
+    editorHistory.flush();
+  }, HISTORY_COALESCE_MS);
+}
+
+function syncHistoryButtons() {
+  const canUndo = editorHistory.canUndo();
+  const canRedo = editorHistory.canRedo();
+  undoButton.disabled = canUndo === false;
+  redoButton.disabled = canRedo === false;
+}
+
+function recordEditorHistory(kind) {
+  if (applyingHistory || isEditorComposing()) {
+    return;
+  }
+  editorHistory.record(captureEditorSnapshot(), kind);
+  if (kind === "immediate") {
+    clearHistoryCoalesceTimer();
+    editorHistory.flush();
+  } else {
+    scheduleHistoryFlush();
+  }
+  syncHistoryButtons();
+}
+
+function applyEditorSnapshot(snap) {
+  if (!snap) {
+    return;
+  }
+  applyingHistory = true;
+  codeEditor.value = snap.value;
+  const max = codeEditor.value.length;
+  const start = Math.max(0, Math.min(typeof snap.start === "number" ? snap.start : max, max));
+  const end = Math.max(0, Math.min(typeof snap.end === "number" ? snap.end : start, max));
+  codeEditor.setSelectionRange(start, end);
+  if (typeof snap.scrollTop === "number") {
+    codeEditor.scrollTop = Math.max(0, snap.scrollTop);
+  }
+  updateEditorView();
+  syncEditorScroll();
+  handleEditorCaretForColorPicker();
+  applyingHistory = false;
+  syncHistoryButtons();
+}
+
+function undoEditorHistory() {
+  if (isEditorComposing() || editorHistory.canUndo() === false) {
+    return;
+  }
+  clearHistoryCoalesceTimer();
+  applyEditorSnapshot(editorHistory.undo(captureEditorSnapshot()));
+}
+
+function redoEditorHistory() {
+  if (isEditorComposing() || editorHistory.canRedo() === false) {
+    return;
+  }
+  clearHistoryCoalesceTimer();
+  applyEditorSnapshot(editorHistory.redo(captureEditorSnapshot()));
+}
+
+function resetEditorHistoryBaseline() {
+  clearHistoryCoalesceTimer();
+  editorHistory.setBaseline(captureEditorSnapshot());
+  syncHistoryButtons();
+}
+
+function undoRedoActionFromEvent(event) {
+  if (!event.ctrlKey || event.altKey || event.metaKey) {
+    return null;
+  }
+  const key = event.key;
+  if (key === "z" || key === "Z") {
+    return event.shiftKey ? "redo" : "undo";
+  }
+  if ((key === "y" || key === "Y") && event.shiftKey === false) {
+    return "redo";
+  }
+  return null;
+}
 
 function setEditorCode(code) {
   codeEditor.value = code;
@@ -906,6 +1018,7 @@ function applyPickerRgbToCode(constName, r, g, b) {
   codeEditor.setSelectionRange(replacement.newEnd, replacement.newEnd);
   updateEditorView();
   applyingColorPicker = false;
+  recordEditorHistory("picker");
 }
 
 function applyPickerToCode(constName, hexValue) {
@@ -1288,6 +1401,7 @@ function restartQuiz() {
 
 function resetCode() {
   setEditorCode(INITIAL_CODE);
+  resetEditorHistoryBaseline();
   applyCodeToPreview();
 }
 
@@ -1410,7 +1524,22 @@ function stopConsoleResize() {
 // イベント設定
 // ==================================================
 
+codeEditor.addEventListener("beforeinput", function (event) {
+  if (event.isComposing || isEditorComposing()) {
+    return;
+  }
+  if (event.inputType === "historyUndo") {
+    event.preventDefault();
+    undoEditorHistory();
+  } else if (event.inputType === "historyRedo") {
+    event.preventDefault();
+    redoEditorHistory();
+  }
+});
 codeEditor.addEventListener("input", function () {
+  if (!isEditorComposing()) {
+    recordEditorHistory("type");
+  }
   updateEditorView();
   handleEditorCaretForColorPicker();
 });
@@ -1433,6 +1562,9 @@ codeEditor.addEventListener("compositionstart", function () {
 codeEditor.addEventListener("compositionupdate", updateEditorView);
 codeEditor.addEventListener("compositionend", function () {
   editorWrap.classList.remove("is-composing");
+  recordEditorHistory("ime");
+  clearHistoryCoalesceTimer();
+  editorHistory.flush();
   updateEditorView();
 });
 document.addEventListener("selectionchange", function () {
@@ -1451,6 +1583,8 @@ if (typeof ResizeObserver === "function") {
   new ResizeObserver(syncEditorOverlay).observe(codeEditor);
 }
 runButton.addEventListener("click", applyCodeToPreview);
+undoButton.addEventListener("click", undoEditorHistory);
+redoButton.addEventListener("click", redoEditorHistory);
 resetCodeButton.addEventListener("click", resetCode);
 colorPickerPopover.addEventListener("mousedown", function (event) {
   event.stopPropagation();
@@ -1476,6 +1610,13 @@ document.addEventListener("mousemove", function (event) {
   }
 });
 document.addEventListener("mouseup", function () {
+  if (colorPickerDrag) {
+    colorPickerDrag = null;
+    clearHistoryCoalesceTimer();
+    editorHistory.flush();
+    syncHistoryButtons();
+    return;
+  }
   colorPickerDrag = null;
 });
 document.addEventListener("mousedown", function (event) {
@@ -1491,6 +1632,19 @@ document.addEventListener("keydown", function (event) {
   if (event.key === "Escape" && isColorPickerOpen()) {
     closeColorPicker();
   }
+  if (event.isComposing || event.keyCode === 229 || isEditorComposing()) {
+    return;
+  }
+  const historyAction = undoRedoActionFromEvent(event);
+  if (historyAction === null) {
+    return;
+  }
+  event.preventDefault();
+  if (historyAction === "undo") {
+    undoEditorHistory();
+  } else {
+    redoEditorHistory();
+  }
 });
 cpNumR.addEventListener("input", function () {
   handleRgbNumberInput("r", cpNumR);
@@ -1503,12 +1657,18 @@ cpNumB.addEventListener("input", function () {
 });
 cpNumR.addEventListener("blur", function () {
   handleRgbNumberBlur("r", cpNumR);
+  clearHistoryCoalesceTimer();
+  editorHistory.flush();
 });
 cpNumG.addEventListener("blur", function () {
   handleRgbNumberBlur("g", cpNumG);
+  clearHistoryCoalesceTimer();
+  editorHistory.flush();
 });
 cpNumB.addEventListener("blur", function () {
   handleRgbNumberBlur("b", cpNumB);
+  clearHistoryCoalesceTimer();
+  editorHistory.flush();
 });
 furiganaToggle.addEventListener("change", updateEditorView);
 clearConsoleButton.addEventListener("click", clearConsole);
@@ -1554,6 +1714,7 @@ initializeLearningState();
 setGuideOpen(false);
 appendConsole("info", "初期コードを読み込みました。変更できるのはタイトル・色・問題文・選択肢と正解番号だけです。");
 setEditorCode(INITIAL_CODE);
+resetEditorHistoryBaseline();
 applyCodeToPreview();
 window.getLastValidQuizData = getLastValidQuizData;
 window.generateStandaloneQuizHtmlForCurrentEditor = generateStandaloneQuizHtmlForCurrentEditor;
@@ -1579,6 +1740,18 @@ window.getColorPickerState = function () {
     left: colorPickerPopover.style.left,
     top: colorPickerPopover.style.top
   };
+};
+window.undoEditorHistory = undoEditorHistory;
+window.redoEditorHistory = redoEditorHistory;
+window.recordEditorHistory = recordEditorHistory;
+window.resetEditorHistoryBaseline = resetEditorHistoryBaseline;
+window.flushEditorHistory = function () {
+  clearHistoryCoalesceTimer();
+  editorHistory.flush();
+  syncHistoryButtons();
+};
+window.getEditorHistoryState = function () {
+  return editorHistory.getState();
 };
 window.getCurrentStepProgress = function (stepNumber) {
   let parsed = null;

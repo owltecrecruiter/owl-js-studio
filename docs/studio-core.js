@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.3
+ * OWL JS Studio v0.9.4
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -1227,6 +1227,110 @@
     };
   }
 
+  function createCodeHistory(options) {
+    var settings = options || {};
+    var cap = typeof settings.cap === "number" && settings.cap > 0 ? settings.cap : 100;
+    var undoStack = [];
+    var redoStack = [];
+    var lastKnown = null;
+    var lastKind = null;
+
+    function cloneSnap(snap) {
+      if (!snap) {
+        return null;
+      }
+      return {
+        value: String(snap.value),
+        start: snap.start,
+        end: snap.end,
+        scrollTop: snap.scrollTop
+      };
+    }
+
+    function setBaseline(snap) {
+      undoStack.length = 0;
+      redoStack.length = 0;
+      lastKnown = cloneSnap(snap);
+      lastKind = null;
+    }
+
+    function record(snap, kind) {
+      var next = cloneSnap(snap);
+      var recordKind = kind || "type";
+      if (!lastKnown) {
+        lastKnown = next;
+        return;
+      }
+      if (lastKnown.value === next.value) {
+        lastKnown = next;
+        return;
+      }
+      var coalescing = lastKind !== null && lastKind === recordKind && recordKind !== "immediate";
+      if (!coalescing) {
+        undoStack.push(cloneSnap(lastKnown));
+        if (undoStack.length > cap) {
+          undoStack.shift();
+        }
+      }
+      redoStack.length = 0;
+      lastKnown = next;
+      lastKind = recordKind === "immediate" ? null : recordKind;
+    }
+
+    function flush() {
+      lastKind = null;
+    }
+
+    function undo(current) {
+      flush();
+      if (undoStack.length === 0) {
+        return null;
+      }
+      redoStack.push(cloneSnap(current || lastKnown));
+      lastKnown = undoStack.pop();
+      return cloneSnap(lastKnown);
+    }
+
+    function redo(current) {
+      flush();
+      if (redoStack.length === 0) {
+        return null;
+      }
+      undoStack.push(cloneSnap(current || lastKnown));
+      lastKnown = redoStack.pop();
+      return cloneSnap(lastKnown);
+    }
+
+    function canUndo() {
+      return undoStack.length > 0;
+    }
+
+    function canRedo() {
+      return redoStack.length > 0;
+    }
+
+    function getState() {
+      return {
+        undoCount: undoStack.length,
+        redoCount: redoStack.length,
+        canUndo: undoStack.length > 0,
+        canRedo: redoStack.length > 0,
+        lastKind: lastKind
+      };
+    }
+
+    return {
+      setBaseline: setBaseline,
+      record: record,
+      flush: flush,
+      undo: undo,
+      redo: redo,
+      canUndo: canUndo,
+      canRedo: canRedo,
+      getState: getState
+    };
+  }
+
   function safeSerializeForInlineScript(value) {
     return JSON.stringify(value)
       .replace(/</g, "\\u003C")
@@ -1485,6 +1589,7 @@
     createStandaloneQuizHtml: createStandaloneQuizHtml,
     safeSerializeForInlineScript: safeSerializeForInlineScript,
     createCodeError: createCodeError,
-    workLooksComplete: workLooksComplete
+    workLooksComplete: workLooksComplete,
+    createCodeHistory: createCodeHistory
   };
 });

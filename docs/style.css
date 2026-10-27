@@ -14,15 +14,16 @@ body {
   --editor-line-height: 21px;
   --editor-pad-y: 8px;
   --editor-pad-x: 12px;
-  --chrome-bg: #3c3c3c;
-  --activity-bg: #333333;
-  --sidebar-bg: #252526;
+  --chrome-bg: #243044;
+  --activity-bg: #1b2433;
+  --sidebar-bg: #1e2736;
   --editor-bg: #1e1e1e;
   --panel-bg: #1e1e1e;
-  --border: #2b2b2b;
-  --text: #cccccc;
-  --text-dim: #9d9d9d;
-  --accent: #007acc;
+  --border: #314056;
+  --text: #e6edf5;
+  --text-dim: #9aa8b8;
+  --accent: #2b7fc1;
+  --accent-strong: #1e6bb8;
 }
 
 body {
@@ -47,7 +48,7 @@ button {
   padding: 0 12px;
   color: var(--text);
   background: var(--chrome-bg);
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--border);
   user-select: none;
 }
 
@@ -101,6 +102,7 @@ button {
 }
 
 .company-name {
+  color: #f8fafc;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -109,16 +111,18 @@ button {
 
 .title-name {
   margin: 0;
-  color: #f3f3f3;
-  font-size: 13px;
+  padding-left: 10px;
+  color: #f8fafc;
+  border-left: 2px solid var(--accent);
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
   white-space: nowrap;
 }
 
 .title-copy {
   margin: 0;
-  color: #c5c5c5;
+  color: #c5d0dc;
   font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
@@ -135,11 +139,11 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   width: 48px;
   padding-top: 6px;
   background: var(--activity-bg);
-  border-right: 1px solid #2a2a2a;
+  border-right: 1px solid var(--border);
 }
 
 .activity-button {
@@ -155,8 +159,8 @@ button {
 }
 
 .activity-button svg {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
 }
 
 .activity-button:hover {
@@ -179,10 +183,11 @@ button {
 
 .sidebar-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 12px;
+  min-height: 35px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -214,7 +219,7 @@ button {
 .editor-column {
   display: flex;
   flex-direction: column;
-  flex: 1.2;
+  flex: 3 1 0;
   min-width: 420px;
   min-height: 0;
   overflow: hidden;
@@ -227,7 +232,7 @@ button {
   flex-wrap: wrap;
   gap: 8px 12px;
   min-height: 35px;
-  background: #252526;
+  background: var(--sidebar-bg);
   border-bottom: 1px solid var(--border);
 }
 
@@ -260,10 +265,10 @@ button {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  flex: 1 1 260px;
+  flex: 1 1 320px;
   gap: 6px;
   min-width: 0;
-  padding: 4px 8px;
+  padding: 4px 10px;
 }
 
 .editor-wrap {
@@ -334,7 +339,7 @@ button {
 .furigana-gutter {
   display: none;
   color: #dcdcaa;
-  background: #252526;
+  background: #243044;
   border-right: 1px solid var(--border);
   font-family: "Yu Gothic", "Meiryo", sans-serif;
   font-size: 10px;
@@ -435,7 +440,7 @@ button {
 .console-resize {
   height: 4px;
   cursor: ns-resize;
-  background: #2b2b2b;
+  background: var(--border);
 }
 
 .console-resize:hover {
@@ -456,9 +461,9 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 28px;
+  min-height: 35px;
   padding: 0 10px;
-  background: #252526;
+  background: var(--sidebar-bg);
   border-bottom: 1px solid var(--border);
 }
 
@@ -502,8 +507,8 @@ button {
 .preview-panel {
   display: flex;
   flex-direction: column;
-  flex: 0.8;
-  min-width: 300px;
+  flex: 2 1 0;
+  min-width: 456px;
   background: var(--sidebar-bg);
   border-left: 1px solid var(--border);
 }
@@ -511,8 +516,10 @@ button {
 .preview-header {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 8px 12px;
+  justify-content: center;
+  gap: 2px;
+  min-height: 35px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -527,9 +534,9 @@ button {
   z-index: 40;
   width: 232px;
   padding: 8px;
-  color: #cccccc;
-  background: #252526;
-  border: 1px solid #3c3c3c;
+  color: var(--text);
+  background: var(--sidebar-bg);
+  border: 1px solid var(--border);
   border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
   user-select: none;
@@ -671,8 +678,8 @@ button {
 .quiz-screen,
 .result-screen {
   width: 100%;
-  max-width: 340px;
-  padding: 14px 14px 12px;
+  max-width: 480px;
+  padding: 18px 18px 16px;
   text-align: left;
   color: #1f2937;
   background: #ffffff;
@@ -681,7 +688,7 @@ button {
 
 .title-screen {
   text-align: center;
-  padding: 18px 16px 16px;
+  padding: 22px 20px 18px;
 }
 
 .quiz-kicker {
@@ -693,7 +700,7 @@ button {
 
 .game-title {
   margin: 0 0 8px;
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1.4;
 }
 
@@ -750,9 +757,9 @@ button {
 }
 
 .question-text {
-  margin: 0 0 12px;
-  font-size: 16px;
-  line-height: 1.45;
+  margin: 0 0 14px;
+  font-size: 18px;
+  line-height: 1.5;
 }
 
 .choices {
@@ -811,7 +818,7 @@ button {
 
 .score-text {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
 }
 
@@ -863,27 +870,35 @@ button {
 .main-button {
   padding: 5px 12px;
   color: #ffffff;
-  background: #0e639c;
+  background: var(--accent-strong);
 }
 
 .main-button:hover {
-  background: #1177bb;
+  background: var(--accent);
 }
 
 .sub-button {
   padding: 5px 12px;
-  color: #e6e6e6;
-  background: #3c3c3c;
-  border: 1px solid #3e3e42;
+  color: var(--text);
+  background: #2b3848;
+  border: 1px solid #3d4d61;
 }
 
 .sub-button:hover {
-  background: #505050;
+  background: #35465a;
+}
+
+.sub-button:disabled {
+  color: var(--text-dim);
+  background: #243044;
+  border-color: var(--border);
+  cursor: default;
+  opacity: 0.55;
 }
 
 .icon-button {
-  padding: 3px 8px;
-  color: #cccccc;
+  padding: 4px 8px;
+  color: var(--text);
   background: transparent;
   font-size: 12px;
 }
@@ -897,11 +912,11 @@ button {
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  color: #cccccc;
+  color: var(--text);
   font-size: 12px;
   font-weight: 700;
-  background: #3c3c3c;
-  border: 1px solid #3e3e42;
+  background: #2b3848;
+  border: 1px solid #3d4d61;
   white-space: nowrap;
 }
 
@@ -934,8 +949,8 @@ button {
 
 .step-button.active {
   color: #ffffff;
-  background: #0e639c;
-  border-color: #0e639c;
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
 }
 
 .step-button.complete:not(.active) {
