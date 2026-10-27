@@ -18,6 +18,8 @@ const evaluateStepProgress = studioCore.evaluateStepProgress;
 const getStepFocusLines = studioCore.getStepFocusLines;
 const describeIdentifier = studioCore.describeIdentifier;
 const getContrastWarning = studioCore.getContrastWarning;
+const getStepClearMessage = studioCore.getStepClearMessage;
+const formatLearnerConsoleError = studioCore.formatLearnerConsoleError;
 const createCodeError = studioCore.createCodeError;
 const parseRgbLiteral = studioCore.parseRgbLiteral;
 const formatRgbLiteral = studioCore.formatRgbLiteral;
@@ -112,6 +114,13 @@ let applyingColorPicker = false;
 let lastRunSourceCode = null;
 let lastRunWork = null;
 let confirmedNewCorrect = false;
+const announcedStepClears = {
+  1: false,
+  2: false,
+  3: false,
+  4: false,
+  5: false
+};
 let colorPickerTarget = null;
 let colorPickerHsv = { h: 0, s: 0, v: 1 };
 let colorPickerRgb = { r: 255, g: 255, b: 255 };
@@ -260,28 +269,107 @@ function escapeHtml(text) {
 }
 
 function showSuccess(message) {
-  appendConsole("success", message);
+  upsertConsoleLine("run-success", "success", message);
   statusParse.textContent = "準備完了";
 }
 
 function showErrors(errors) {
   for (let i = 0; i < errors.length; i++) {
-    appendConsole("error", errors[i]);
+    appendConsole("error", formatLearnerConsoleError(errors[i], codeEditor.value));
   }
   statusParse.textContent = "エラーあり";
 }
 
-function appendConsole(kind, message) {
+function consolePrefix(kind) {
+  if (kind === "error") {
+    return "[エラー]";
+  }
+  if (kind === "success") {
+    return "[実行]";
+  }
+  if (kind === "notice") {
+    return "[注意]";
+  }
+  return "[学習]";
+}
+
+function appendConsole(kind, message, role) {
   const line = document.createElement("div");
   line.className = "console-line console-" + kind;
-  const prefix = kind === "error" ? "[エラー]" : kind === "success" ? "[実行]" : "[学習]";
-  line.textContent = prefix + " " + message;
+  if (role) {
+    line.setAttribute("data-console-role", role);
+  }
+  line.textContent = consolePrefix(kind) + " " + message;
   consoleOutput.appendChild(line);
   consoleOutput.scrollTop = consoleOutput.scrollHeight;
+  return line;
+}
+
+function upsertConsoleLine(role, kind, message) {
+  const existing = consoleOutput.querySelector('[data-console-role="' + role + '"]');
+  if (existing) {
+    existing.className = "console-line console-" + kind;
+    existing.setAttribute("data-console-role", role);
+    existing.textContent = consolePrefix(kind) + " " + message;
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    return existing;
+  }
+  if (role === "run-notice") {
+    const successLine = consoleOutput.querySelector('[data-console-role="run-success"]');
+    if (successLine) {
+      const line = document.createElement("div");
+      line.className = "console-line console-" + kind;
+      line.setAttribute("data-console-role", role);
+      line.textContent = consolePrefix(kind) + " " + message;
+      if (successLine.nextSibling) {
+        consoleOutput.insertBefore(line, successLine.nextSibling);
+      } else {
+        consoleOutput.appendChild(line);
+      }
+      consoleOutput.scrollTop = consoleOutput.scrollHeight;
+      return line;
+    }
+  }
+  return appendConsole(kind, message, role);
+}
+
+function removeConsoleRole(role) {
+  const existing = consoleOutput.querySelector('[data-console-role="' + role + '"]');
+  if (existing) {
+    existing.parentNode.removeChild(existing);
+  }
+}
+
+function removeConsoleByKind(kind) {
+  const lines = consoleOutput.querySelectorAll(".console-" + kind);
+  for (let i = 0; i < lines.length; i++) {
+    lines[i].parentNode.removeChild(lines[i]);
+  }
 }
 
 function clearConsole() {
   clearChildren(consoleOutput);
+}
+
+function announceNewlyCompletedSteps() {
+  let parsed = null;
+  let parseError = null;
+  try {
+    parsed = parseLearnerCode(codeEditor.value);
+  } catch (error) {
+    parseError = error;
+  }
+  for (let stepNumber = 1; stepNumber <= 5; stepNumber++) {
+    const result = evaluateStepProgress(parsed, stepNumber, parseError, initialQuizSnapshot, getStepEvidence());
+    if (result.done === true) {
+      if (announcedStepClears[stepNumber] !== true) {
+        announcedStepClears[stepNumber] = true;
+        appendConsole("success", getStepClearMessage(stepNumber));
+      }
+    } else {
+      announcedStepClears[stepNumber] = false;
+    }
+  }
 }
 
 // ==================================================
@@ -694,12 +782,17 @@ function applyCodeToPreview() {
     }
     applyWorkTheme(currentWork);
     showTitleScreen();
-    showSuccess("コードを確認しました。右側のタイトル画面に反映しました。学習者のJavaScriptは実行していません。");
+    removeConsoleByKind("error");
+    showSuccess("実行成功：クイズを更新しました。");
     if (parsed.contrastWarning) {
-      appendConsole("info", parsed.contrastWarning);
+      upsertConsoleLine("run-notice", "notice", parsed.contrastWarning);
+    } else {
+      removeConsoleRole("run-notice");
     }
     updateLearningSupport();
+    announceNewlyCompletedSteps();
   } catch (error) {
+    removeConsoleByKind("error");
     if (error.messages) {
       showErrors(error.messages);
     } else {
@@ -1148,6 +1241,7 @@ function checkAnswer(selectedIndex) {
     ) {
       confirmedNewCorrect = true;
       updateLearningSupport();
+      announceNewlyCompletedSteps();
     }
   } else {
     answerMessage.textContent = "不正解";

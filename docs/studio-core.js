@@ -883,9 +883,46 @@
     }
     var ratio = contrastRatio(backgroundHex, textHex);
     if (ratio < 4.5) {
-      return "背景色と文字色の差が小さいため、文字が読みにくくなる可能性があります。色を変えてみましょう。";
+      return "注意：背景色と文字色が似ています。";
     }
     return null;
+  }
+
+  function getStepClearMessage(stepNumber) {
+    return "STEP " + stepNumber + " クリア！";
+  }
+
+  function findIdentifierLineInSource(source, name) {
+    if (typeof source !== "string" || typeof name !== "string" || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+      return null;
+    }
+    var lines = source.split("\n");
+    var pattern = new RegExp("(^|[^A-Za-z0-9_])" + name + "([^A-Za-z0-9_]|$)");
+    var i;
+    for (i = 0; i < lines.length; i++) {
+      if (pattern.test(lines[i])) {
+        return i + 1;
+      }
+    }
+    return null;
+  }
+
+  function formatLearnerConsoleError(message, source) {
+    var text = String(message || "コードを確認してください。");
+    if (/行\d+/.test(text)) {
+      return text;
+    }
+    var sourceText = typeof source === "string" ? source : "";
+    var namePattern = /`([A-Za-z_][A-Za-z0-9_]*)`/g;
+    var match = namePattern.exec(text);
+    while (match !== null) {
+      var line = findIdentifierLineInSource(sourceText, match[1]);
+      if (line !== null) {
+        return "行" + line + "：" + text;
+      }
+      match = namePattern.exec(text);
+    }
+    return text;
   }
 
   function cloneQuestions(questions) {
@@ -1435,6 +1472,8 @@
     createMakerCreditHtml: createMakerCreditHtml,
     isSafeCssColor: isSafeCssColor,
     getContrastWarning: getContrastWarning,
+    getStepClearMessage: getStepClearMessage,
+    formatLearnerConsoleError: formatLearnerConsoleError,
     contrastRatio: contrastRatio,
     cloneWorkData: cloneWorkData,
     cloneQuestions: cloneQuestions,

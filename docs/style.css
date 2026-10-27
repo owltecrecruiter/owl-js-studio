@@ -488,7 +488,11 @@ button {
 }
 
 .console-success {
-  color: #b5cea8;
+  color: #89d185;
+}
+
+.console-notice {
+  color: #cca700;
 }
 
 .console-error {
