@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.8
+ * OWL JS Studio v0.9.9
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -1079,8 +1079,9 @@
       ".quiz-surface .choice-button, .quiz-surface .main-button { width: 100%; color: inherit; background: transparent; border: 1px solid currentColor; }",
       ".quiz-surface .choice-button { padding: 11px 12px; font-size: 14px; text-align: left; }",
       ".quiz-surface .choice-button:hover:not(:disabled) { opacity: 0.88; }",
-      ".quiz-surface .choice-button:disabled { cursor: not-allowed; opacity: 0.72; }",
+      ".quiz-surface .choice-button:disabled { cursor: not-allowed; opacity: 0.55; }",
       ".quiz-surface .choice-button.selected { outline: 2px solid currentColor; }",
+      ".quiz-surface .choice-button.selected:disabled { opacity: 1; }",
       ".quiz-surface .main-button { padding: 12px 14px; font-size: 15px; }",
       ".quiz-surface .start-button { padding: 14px 16px; font-size: 16px; letter-spacing: 0.08em; border-width: 2px; }",
       ".quiz-surface .answer-message { min-height: 24px; margin: 0 0 12px; font-size: 15px; font-weight: 700; }",

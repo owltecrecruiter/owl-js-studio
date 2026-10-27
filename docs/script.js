@@ -1387,6 +1387,7 @@ function renderQuestionScreen() {
     choiceButtons[i].textContent = quiz.choices[i];
     choiceButtons[i].disabled = false;
     choiceButtons[i].classList.remove("selected");
+    choiceButtons[i].setAttribute("aria-pressed", "false");
   }
 
   if (saved === null) {
@@ -1403,8 +1404,10 @@ function renderQuestionScreen() {
 function paintAnswer(selectedIndex) {
   answered = true;
   for (let i = 0; i < choiceButtons.length; i++) {
-    choiceButtons[i].classList.toggle("selected", i === selectedIndex);
-    choiceButtons[i].disabled = false;
+    const isSelected = i === selectedIndex;
+    choiceButtons[i].classList.toggle("selected", isSelected);
+    choiceButtons[i].disabled = true;
+    choiceButtons[i].setAttribute("aria-pressed", isSelected ? "true" : "false");
   }
   answerMessage.className = "answer-message";
   if (selectedIndex === quizData[currentQuestionIndex].correctIndex) {
@@ -1440,11 +1443,11 @@ function maybeConfirmNewCorrect() {
 }
 
 function checkAnswer(selectedIndex) {
-  const previous = previewHistory.getAnswer(currentQuestionIndex);
-  if (previous !== selectedIndex) {
-    previewHistory.recordAnswer(currentQuestionIndex, selectedIndex);
-    paintAnswer(selectedIndex);
+  if (previewHistory.getAnswer(currentQuestionIndex) !== null) {
+    return;
   }
+  previewHistory.recordAnswer(currentQuestionIndex, selectedIndex);
+  paintAnswer(selectedIndex);
   maybeConfirmNewCorrect();
   updatePreviewChrome();
 }
