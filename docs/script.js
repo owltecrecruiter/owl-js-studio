@@ -35,6 +35,7 @@ const findLearnerRgbLiteralByName = studioCore.findLearnerRgbLiteralByName;
 const findLearnerRgbLiteralAtOffset = studioCore.findLearnerRgbLiteralAtOffset;
 const createCodeHistory = studioCore.createCodeHistory;
 const createPreviewHistory = studioCore.createPreviewHistory;
+const questionHasPairedStep5Edits = studioCore.questionHasPairedStep5Edits;
 
 // ==================================================
 // 画面要素
@@ -1416,29 +1417,35 @@ function paintAnswer(selectedIndex) {
   nextButton.classList.remove("hidden");
 }
 
-function maybeConfirmNewCorrect(selectedIndex) {
-  if (
-    selectedIndex === quizData[currentQuestionIndex].correctIndex &&
-    initialQuizSnapshot &&
-    lastRunWork &&
-    lastRunSourceCode === codeEditor.value &&
-    lastRunWork.questions[currentQuestionIndex].correctIndex !== initialQuizSnapshot.questions[currentQuestionIndex].correctIndex
-  ) {
-    confirmedNewCorrect = true;
-    updateLearningSupport();
-    announceNewlyCompletedSteps();
+function maybeConfirmNewCorrect() {
+  if (!initialQuizSnapshot || !lastRunWork || lastRunSourceCode !== codeEditor.value) {
+    return;
   }
+  if (typeof currentQuestionIndex !== "number") {
+    return;
+  }
+  if (questionHasPairedStep5Edits(lastRunWork, initialQuizSnapshot, currentQuestionIndex) !== true) {
+    return;
+  }
+  const selected = previewHistory.getAnswer(currentQuestionIndex);
+  if (selected !== lastRunWork.questions[currentQuestionIndex].correctIndex) {
+    return;
+  }
+  if (confirmedNewCorrect === true) {
+    return;
+  }
+  confirmedNewCorrect = true;
+  updateLearningSupport();
+  announceNewlyCompletedSteps();
 }
 
 function checkAnswer(selectedIndex) {
   const previous = previewHistory.getAnswer(currentQuestionIndex);
-  if (previous === selectedIndex) {
-    return;
+  if (previous !== selectedIndex) {
+    previewHistory.recordAnswer(currentQuestionIndex, selectedIndex);
+    paintAnswer(selectedIndex);
   }
-
-  previewHistory.recordAnswer(currentQuestionIndex, selectedIndex);
-  paintAnswer(selectedIndex);
-  maybeConfirmNewCorrect(selectedIndex);
+  maybeConfirmNewCorrect();
   updatePreviewChrome();
 }
 

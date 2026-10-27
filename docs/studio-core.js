@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.7
+ * OWL JS Studio v0.9.8
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -134,11 +134,11 @@
     {
       number: 5,
       title: "STEP 5：選択肢と正解を変える",
-      description: "やること：選択肢の文字と、正解番号を変えます。変える場所：`choice1_1` などと `selectedIndex1 === 0` の右側の番号。番号は 0始まりです（0=1番目、1=2番目、2=3番目）。手順：1) 選択肢を変える 2) 正解番号を別の 0/1/2 に変える 3) 実行する 4) クイズで新しい正解を選ぶ 5) 「正解！」と出ればこのSTEPはクリアです。",
+      description: "やること：同じ問題で、選択肢の文字と正解番号の両方を変えます。変える場所：例）`choice1_1` と `selectedIndex1 === 0` の右側の番号。番号は 0始まりです（0=1番目、1=2番目、2=3番目）。手順：1) どれか1問の選択肢を変える 2) 同じ問題の正解番号を別の 0/1/2 に変える 3) 実行する 4) その問題で新しい正解を選ぶ 5) 「正解！」と出ればこのSTEPはクリアです。",
       hints: [
+        "第1問なら `choice1_1` などと `selectedIndex1`、第2問なら `choice2_1` と `selectedIndex2` のように、同じ問題の両方を変えます。別の問題の変更を組み合わせてもクリアになりません。",
         "正解番号は 0が1番目、1が2番目、2が3番目です。1始まり（1,2,3）では書けません。",
-        "`selectedIndex1` や `if` / `else` の形は変えず、右側の番号と選択肢の文字だけを変えます。STEPボタンを押すと、変える行へジャンプします。",
-        "実行したあと、新しい正解を押して「正解！」が出るまで、このSTEPはクリアになりません。"
+        "実行したあと、変更した問題で新しい正解を押して「正解！」が出るまで、このSTEPはクリアになりません。"
       ]
     }
   ];
@@ -1338,33 +1338,69 @@
     }
   }
 
-  function getStep5ChangeSummary(work, initialWork) {
-    var changedChoices = 0;
-    var changedAnswers = 0;
+  function getStep5QuestionStates(work, initialWork) {
+    var states = [];
     var i;
     var j;
-    if (!work || !initialWork || !work.questions || !initialWork.questions) {
-      return {
-        changedChoices: 0,
-        changedAnswers: 0
-      };
-    }
+    var choicesChanged;
+    var answerChanged;
     for (i = 0; i < WORK_LIMITS.questionCount; i++) {
-      if (!work.questions[i] || !initialWork.questions[i]) {
-        continue;
+      choicesChanged = false;
+      answerChanged = false;
+      if (work && initialWork && work.questions && initialWork.questions && work.questions[i] && initialWork.questions[i]) {
+        answerChanged = work.questions[i].correctIndex !== initialWork.questions[i].correctIndex;
+        for (j = 0; j < WORK_LIMITS.choiceCount; j++) {
+          if (work.questions[i].choices[j] !== initialWork.questions[i].choices[j]) {
+            choicesChanged = true;
+          }
+        }
       }
-      if (work.questions[i].correctIndex !== initialWork.questions[i].correctIndex) {
+      states.push({
+        choicesChanged: choicesChanged,
+        answerChanged: answerChanged,
+        paired: choicesChanged === true && answerChanged === true
+      });
+    }
+    return states;
+  }
+
+  function hasPairedStep5Question(work, initialWork) {
+    var states = getStep5QuestionStates(work, initialWork);
+    var i;
+    for (i = 0; i < states.length; i++) {
+      if (states[i].paired === true) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function questionHasPairedStep5Edits(work, initialWork, questionIndex) {
+    var states = getStep5QuestionStates(work, initialWork);
+    return !!(states[questionIndex] && states[questionIndex].paired === true);
+  }
+
+  function getStep5ChangeSummary(work, initialWork) {
+    var states = getStep5QuestionStates(work, initialWork);
+    var changedChoices = 0;
+    var changedAnswers = 0;
+    var pairedQuestions = 0;
+    var i;
+    for (i = 0; i < states.length; i++) {
+      if (states[i].choicesChanged) {
+        changedChoices = changedChoices + 1;
+      }
+      if (states[i].answerChanged) {
         changedAnswers = changedAnswers + 1;
       }
-      for (j = 0; j < WORK_LIMITS.choiceCount; j++) {
-        if (work.questions[i].choices[j] !== initialWork.questions[i].choices[j]) {
-          changedChoices = changedChoices + 1;
-        }
+      if (states[i].paired) {
+        pairedQuestions = pairedQuestions + 1;
       }
     }
     return {
       changedChoices: changedChoices,
-      changedAnswers: changedAnswers
+      changedAnswers: changedAnswers,
+      pairedQuestions: pairedQuestions
     };
   }
 
@@ -1444,28 +1480,27 @@
     var lastRunWork = extra.lastRunWork || null;
     var confirmedNewCorrect = extra.confirmedNewCorrect === true;
     var parsedChanges = getStep5ChangeSummary(work, initialWork);
-    var runChanges = lastRunWork ? getStep5ChangeSummary(lastRunWork, initialWork) : { changedChoices: 0, changedAnswers: 0 };
-    var parsedReady = parsedChanges.changedChoices > 0 && parsedChanges.changedAnswers > 0;
-    var runReady = runChanges.changedChoices > 0 && runChanges.changedAnswers > 0;
+    var parsedReady = hasPairedStep5Question(work, initialWork);
+    var runReady = hasPairedStep5Question(lastRunWork, initialWork);
 
     if (parsedReady !== true) {
       return {
         done: false,
-        message: "未達成：選択肢（変更 " + parsedChanges.changedChoices + "）と正解番号（変更 " + parsedChanges.changedAnswers + "問）を変えましょう。番号は0が1番目・1が2番目・2が3番目です。"
+        message: "未達成：同じ問題で選択肢と正解番号の両方を変えましょう（選択肢を変えた問 " + parsedChanges.changedChoices + "、正解番号を変えた問 " + parsedChanges.changedAnswers + "、両方そろった問 " + parsedChanges.pairedQuestions + "）。番号は0が1番目・1が2番目・2が3番目です。"
       };
     }
 
     if (runReady !== true || editorMatchesLastRun !== true) {
       return {
         done: false,
-        message: "未達成：選択肢と正解番号の変更を実行し、クイズで新しい正解（0=1番目、1=2番目、2=3番目）を選んで判定を確認しましょう。"
+        message: "未達成：同じ問題の選択肢と正解番号の変更を実行し、その問題で新しい正解（0=1番目、1=2番目、2=3番目）を選んで判定を確認しましょう。"
       };
     }
 
     if (confirmedNewCorrect !== true) {
       return {
         done: false,
-        message: "未達成：実行済みです。クイズで新しい正解を選び、「正解！」と出るか確認しましょう。"
+        message: "未達成：実行済みです。変更した問題で新しい正解を選び、「正解！」と出るか確認しましょう。"
       };
     }
 
@@ -1997,6 +2032,9 @@
     cloneQuestions: cloneQuestions,
     validateWorkData: validateWorkData,
     getStep5ChangeSummary: getStep5ChangeSummary,
+    getStep5QuestionStates: getStep5QuestionStates,
+    hasPairedStep5Question: hasPairedStep5Question,
+    questionHasPairedStep5Edits: questionHasPairedStep5Edits,
     evaluateStepProgress: evaluateStepProgress,
     getStepFocusLines: getStepFocusLines,
     describeIdentifier: describeIdentifier,
