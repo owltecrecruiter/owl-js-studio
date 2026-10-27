@@ -79,6 +79,7 @@ const gameTitleLabel = document.getElementById("game-title");
 const quizTotalLabel = document.getElementById("quiz-total");
 const startButton = document.getElementById("start-button");
 const questionNumber = document.getElementById("question-number");
+const questionMeterFill = document.getElementById("question-meter-fill");
 const questionText = document.getElementById("question-text");
 const answerMessage = document.getElementById("answer-message");
 const nextButton = document.getElementById("next-button");
@@ -86,6 +87,8 @@ const scoreText = document.getElementById("score-text");
 const resultMessage = document.getElementById("result-message");
 const retryButton = document.getElementById("retry-button");
 const backToTitleButton = document.getElementById("back-to-title-button");
+const previewRunState = document.getElementById("preview-run-state");
+const previewProgress = document.getElementById("preview-progress");
 const colorPickerPopover = document.getElementById("color-picker-popover");
 const cpSv = document.getElementById("cp-sv");
 const cpSvThumb = document.getElementById("cp-sv-thumb");
@@ -222,6 +225,7 @@ function applyEditorSnapshot(snap) {
   handleEditorCaretForColorPicker();
   applyingHistory = false;
   syncHistoryButtons();
+  updatePreviewChrome();
 }
 
 function undoEditorHistory() {
@@ -263,6 +267,7 @@ function undoRedoActionFromEvent(event) {
 function setEditorCode(code) {
   codeEditor.value = code;
   updateEditorView();
+  updatePreviewChrome();
 }
 
 function updateEditorView() {
@@ -884,6 +889,7 @@ function applyCodeToPreview() {
     } else {
       showErrors(["コードを確認してください。"]);
     }
+    updatePreviewChrome();
   }
 }
 
@@ -993,6 +999,7 @@ function applyPickerRgbToCode(constName, r, g, b) {
   updateEditorView();
   applyingColorPicker = false;
   recordEditorHistory("picker");
+  updatePreviewChrome();
 }
 
 function applyPickerToCode(constName, hexValue) {
@@ -1272,6 +1279,29 @@ function showOnlyPreviewScreen(target) {
   resultScreen.classList.toggle("hidden", target !== resultScreen);
 }
 
+function isPreviewRunFresh() {
+  return lastRunSourceCode !== null && lastRunSourceCode === codeEditor.value;
+}
+
+function updatePreviewChrome() {
+  let screenLabel = "タイトル";
+  let progressLabel = "タイトル画面";
+  if (quizScreen.classList.contains("hidden") === false) {
+    const questionNo = currentQuestionIndex + 1;
+    screenLabel = "問" + questionNo + "/3";
+    progressLabel = answered ? questionNo + "/3 答え済み" : "第" + questionNo + "問";
+  } else if (resultScreen.classList.contains("hidden") === false) {
+    screenLabel = "結果";
+    progressLabel = "結果";
+  }
+  if (previewRunState) {
+    previewRunState.textContent = isPreviewRunFresh() ? "実行済 · " + screenLabel : "未実行";
+  }
+  if (previewProgress) {
+    previewProgress.textContent = progressLabel;
+  }
+}
+
 function showTitleScreen() {
   currentQuestionIndex = 0;
   correctCount = 0;
@@ -1281,6 +1311,7 @@ function showTitleScreen() {
   }
   quizTotalLabel.textContent = "全3問";
   showOnlyPreviewScreen(titleScreen);
+  updatePreviewChrome();
 }
 
 function startQuiz() {
@@ -1295,6 +1326,9 @@ function showQuestion() {
   answered = false;
   showOnlyPreviewScreen(quizScreen);
   questionNumber.textContent = "第" + (currentQuestionIndex + 1) + "問 / 全3問";
+  if (questionMeterFill) {
+    questionMeterFill.style.width = (((currentQuestionIndex + 1) / quizData.length) * 100) + "%";
+  }
   questionText.textContent = quiz.question;
   answerMessage.textContent = "";
   answerMessage.className = "answer-message";
@@ -1306,6 +1340,7 @@ function showQuestion() {
     choiceButtons[i].disabled = false;
     choiceButtons[i].classList.remove("selected");
   }
+  updatePreviewChrome();
 }
 
 function checkAnswer(selectedIndex) {
@@ -1337,6 +1372,7 @@ function checkAnswer(selectedIndex) {
 
   disableChoices();
   nextButton.classList.remove("hidden");
+  updatePreviewChrome();
 }
 
 function disableChoices() {
@@ -1358,7 +1394,7 @@ function goToNextQuestion() {
 function showResult() {
   showOnlyPreviewScreen(resultScreen);
 
-  scoreText.textContent = "正解数：" + correctCount + " / " + quizData.length;
+  scoreText.textContent = correctCount + " / " + quizData.length;
 
   if (correctCount === quizData.length) {
     resultMessage.textContent = "全問正解です。すばらしい！";
@@ -1367,6 +1403,7 @@ function showResult() {
   } else {
     resultMessage.textContent = "もう一度チャレンジして、JavaScriptに慣れていきましょう。";
   }
+  updatePreviewChrome();
 }
 
 function restartQuiz() {
@@ -1588,6 +1625,7 @@ codeEditor.addEventListener("input", function () {
   }
   updateEditorView();
   handleEditorCaretForColorPicker();
+  updatePreviewChrome();
 });
 codeEditor.addEventListener("scroll", syncEditorScroll);
 codeEditor.addEventListener("keyup", function () {
@@ -1826,3 +1864,4 @@ window.isResetDialogOpen = isResetDialogOpen;
 window.isFuriganaOn = isFuriganaOn;
 window.buildFuriganaModel = buildFuriganaModel;
 window.renderFuriganaView = renderFuriganaView;
+window.updatePreviewChrome = updatePreviewChrome;

@@ -106,45 +106,54 @@
 
     <section class="preview-panel" aria-labelledby="preview-title">
       <div class="preview-header">
-        <div class="preview-heading">
-          <p class="label">Preview</p>
-          <h2 id="preview-title">クイズプレビュー</h2>
-        </div>
+        <h2 id="preview-title">GAME PREVIEW</h2>
+        <p id="preview-run-state" class="preview-run-state">未実行</p>
       </div>
 
-      <div class="preview-card">
-        <section id="title-screen" class="title-screen">
-          <p class="quiz-kicker">3択クイズ</p>
-          <h3 id="game-title" class="game-title">はじめての3択クイズ</h3>
-          <p id="quiz-total" class="quiz-total">全3問</p>
-          <button id="start-button" class="main-button" type="button">はじめる</button>
-          <p class="maker-credit"><span class="maker-credit-powered">Powered by</span><a href="https://owl-tec.co.jp/" target="_blank" rel="noopener noreferrer">OWL Technology</a></p>
-        </section>
+      <div class="preview-stage">
+        <div class="preview-frame" role="region" aria-label="ゲーム画面">
+          <div class="preview-bezel">
+            <div class="quiz-surface">
+              <section id="title-screen" class="screen title-screen">
+                <p class="kicker">3択クイズ</p>
+                <h3 id="game-title" class="game-title">はじめての3択クイズ</h3>
+                <p id="quiz-total" class="quiz-total">全3問</p>
+                <button id="start-button" class="main-button start-button" type="button">はじめる</button>
+                <p class="maker-credit"><span class="maker-credit-powered">Powered by</span><a href="https://owl-tec.co.jp/" target="_blank" rel="noopener noreferrer">OWL Technology</a></p>
+              </section>
 
-        <section id="quiz-screen" class="quiz-screen hidden">
-          <p id="question-number" class="question-number">第1問 / 全3問</p>
-          <h3 id="question-text" class="question-text">問題文が入ります</h3>
+              <section id="quiz-screen" class="screen quiz-screen hidden">
+                <p id="question-number" class="question-number">第1問 / 全3問</p>
+                <div class="question-meter" aria-hidden="true"><span id="question-meter-fill" class="question-meter-fill"></span></div>
+                <h3 id="question-text" class="question-text">問題文が入ります</h3>
 
-          <div class="choices">
-            <button id="choice-0" class="choice-button" type="button"></button>
-            <button id="choice-1" class="choice-button" type="button"></button>
-            <button id="choice-2" class="choice-button" type="button"></button>
+                <div class="choices">
+                  <button id="choice-0" class="choice-button" type="button"></button>
+                  <button id="choice-1" class="choice-button" type="button"></button>
+                  <button id="choice-2" class="choice-button" type="button"></button>
+                </div>
+
+                <p id="answer-message" class="answer-message" aria-live="polite"></p>
+                <button id="next-button" class="main-button hidden" type="button">次の問題へ</button>
+              </section>
+
+              <section id="result-screen" class="screen result-screen hidden">
+                <p class="kicker">結果発表</p>
+                <h3 class="result-heading">クイズ終了</h3>
+                <p class="score-label">正解数</p>
+                <p id="score-text" class="score-text"></p>
+                <p id="result-message" class="result-message"></p>
+                <div class="result-actions">
+                  <button id="retry-button" class="main-button" type="button">もう一度挑戦する</button>
+                  <button id="back-to-title-button" class="main-button" type="button">タイトルへ戻る</button>
+                </div>
+              </section>
+            </div>
           </div>
-
-          <p id="answer-message" class="answer-message" aria-live="polite"></p>
-          <button id="next-button" class="main-button hidden" type="button">次の問題へ</button>
-        </section>
-
-        <section id="result-screen" class="result-screen hidden">
-          <p class="question-number">結果発表</p>
-          <h3 class="question-text">クイズ終了</h3>
-          <p id="score-text" class="score-text"></p>
-          <p id="result-message" class="result-message"></p>
-          <div class="result-actions">
-            <button id="retry-button" class="main-button" type="button">もう一度挑戦する</button>
-            <button id="back-to-title-button" class="main-button" type="button">タイトルへ戻る</button>
+          <div class="preview-frame-footer">
+            <p id="preview-progress" class="preview-progress">タイトル画面</p>
           </div>
-        </section>
+        </div>
       </div>
     </section>
   </div>
@@ -156,7 +165,7 @@
     <span id="status-cursor">Ln 1, Col 1</span>
     <span>JavaScript</span>
     <span>UTF-8</span>
-    <span>v0.9.5</span>
+    <span>v0.9.6</span>
   </footer>
 
   <div id="reset-dialog" class="modal-overlay hidden" hidden>

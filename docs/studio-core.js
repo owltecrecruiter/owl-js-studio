@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.5
+ * OWL JS Studio v0.9.6
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -1061,6 +1061,92 @@
       escapeHtmlText(MAKER_CREDIT_BRAND) + "</a></p>";
   }
 
+  function getQuizSurfaceCss() {
+    return [
+      ".quiz-surface { width: 100%; max-width: 480px; font-family: 'Yu Gothic', 'Meiryo', sans-serif; }",
+      ".quiz-surface .screen { padding: 20px 18px 16px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(15, 23, 42, 0.18); }",
+      ".quiz-surface .title-screen { text-align: center; }",
+      ".quiz-surface .kicker { margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; opacity: 0.72; }",
+      ".quiz-surface .game-title { margin: 0 0 10px; font-size: 26px; line-height: 1.35; font-weight: 700; }",
+      ".quiz-surface .quiz-total { margin: 0 0 18px; font-size: 13px; font-weight: 700; }",
+      ".quiz-surface .question-number { display: inline-block; margin: 0 0 8px; padding: 3px 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; border: 1px solid currentColor; }",
+      ".quiz-surface .question-meter { position: relative; height: 4px; margin: 0 0 14px; overflow: hidden; }",
+      ".quiz-surface .question-meter::before { content: \"\"; position: absolute; inset: 0; background: currentColor; opacity: 0.18; }",
+      ".quiz-surface .question-meter-fill { position: relative; display: block; height: 100%; width: 0; background: currentColor; opacity: 0.55; }",
+      ".quiz-surface .question-text, .quiz-surface .result-heading { margin: 0 0 14px; font-size: 18px; line-height: 1.5; font-weight: 700; }",
+      ".quiz-surface .choices { display: grid; gap: 8px; margin-bottom: 12px; }",
+      ".quiz-surface button { font-family: inherit; font-weight: 700; cursor: pointer; }",
+      ".quiz-surface .choice-button, .quiz-surface .main-button { width: 100%; color: inherit; background: transparent; border: 1px solid currentColor; }",
+      ".quiz-surface .choice-button { padding: 11px 12px; font-size: 14px; text-align: left; }",
+      ".quiz-surface .choice-button:hover:not(:disabled) { opacity: 0.88; }",
+      ".quiz-surface .choice-button:disabled { cursor: not-allowed; opacity: 0.72; }",
+      ".quiz-surface .choice-button.selected { outline: 2px solid currentColor; }",
+      ".quiz-surface .main-button { padding: 12px 14px; font-size: 15px; }",
+      ".quiz-surface .start-button { padding: 14px 16px; font-size: 16px; letter-spacing: 0.08em; border-width: 2px; }",
+      ".quiz-surface .answer-message { min-height: 24px; margin: 0 0 12px; font-size: 15px; font-weight: 700; }",
+      ".quiz-surface .correct { color: #14843c; }",
+      ".quiz-surface .incorrect { color: #c0342b; }",
+      ".quiz-surface .score-label { margin: 0 0 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; opacity: 0.72; }",
+      ".quiz-surface .score-text { margin: 0 0 10px; font-size: 32px; font-weight: 700; line-height: 1.15; }",
+      ".quiz-surface .result-message { margin: 0 0 16px; font-size: 14px; line-height: 1.6; }",
+      ".quiz-surface .result-actions { display: grid; gap: 8px; }",
+      ".quiz-surface .work-reference { margin: 16px 0 0; font-size: 12px; word-break: break-all; opacity: 0.8; }",
+      ".quiz-surface .maker-credit { margin: 16px 0 0; font-size: 12px; font-weight: 400; line-height: 1.45; opacity: 0.78; }",
+      ".quiz-surface .maker-credit-powered { display: block; font-size: 10px; letter-spacing: 0.08em; opacity: 0.82; }",
+      ".quiz-surface .maker-credit a { color: inherit; text-decoration: none; font-weight: 600; }",
+      ".quiz-surface .maker-credit a:hover { text-decoration: underline; }",
+      ".quiz-surface .maker-credit a:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }",
+      ".quiz-surface .hidden { display: none; }"
+    ].join("\n");
+  }
+
+  function getQuizPageCss() {
+    return [
+      "* { box-sizing: border-box; }",
+      "body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: 'Yu Gothic', 'Meiryo', sans-serif; background: #d9e2ec; color: #1f2937; }",
+      "main.quiz-surface { width: min(92vw, 520px); }"
+    ].join("\n");
+  }
+
+  function getQuizSurfaceMarkup(options) {
+    var config = options || {};
+    var titleHeading = config.titleHeading || "h1";
+    var questionHeading = config.questionHeading || "h2";
+    var resultHeading = config.resultHeading || "h2";
+    var includeReference = config.includeReference === true;
+    return "    <section id=\"title-screen\" class=\"screen title-screen\">\n" +
+      "      <p class=\"kicker\">3択クイズ</p>\n" +
+      "      <" + titleHeading + " id=\"game-title\" class=\"game-title\"></" + titleHeading + ">\n" +
+      "      <p id=\"quiz-total\" class=\"quiz-total\">全3問</p>\n" +
+      "      <button id=\"start-button\" class=\"main-button start-button\" type=\"button\">はじめる</button>\n" +
+      "      " + createMakerCreditHtml() + "\n" +
+      "    </section>\n" +
+      "    <section id=\"quiz-screen\" class=\"screen quiz-screen hidden\">\n" +
+      "      <p id=\"question-number\" class=\"question-number\"></p>\n" +
+      "      <div class=\"question-meter\" aria-hidden=\"true\"><span id=\"question-meter-fill\" class=\"question-meter-fill\"></span></div>\n" +
+      "      <" + questionHeading + " id=\"question-text\" class=\"question-text\"></" + questionHeading + ">\n" +
+      "      <div class=\"choices\">\n" +
+      "        <button id=\"choice-0\" class=\"choice-button\" type=\"button\"></button>\n" +
+      "        <button id=\"choice-1\" class=\"choice-button\" type=\"button\"></button>\n" +
+      "        <button id=\"choice-2\" class=\"choice-button\" type=\"button\"></button>\n" +
+      "      </div>\n" +
+      "      <p id=\"answer-message\" class=\"answer-message\" aria-live=\"polite\"></p>\n" +
+      "      <button id=\"next-button\" class=\"main-button hidden\" type=\"button\">次の問題へ</button>\n" +
+      "    </section>\n" +
+      "    <section id=\"result-screen\" class=\"screen result-screen hidden\">\n" +
+      "      <p class=\"kicker\">結果発表</p>\n" +
+      "      <" + resultHeading + " class=\"result-heading\">クイズ終了</" + resultHeading + ">\n" +
+      "      <p class=\"score-label\">正解数</p>\n" +
+      "      <p id=\"score-text\" class=\"score-text\"></p>\n" +
+      "      <p id=\"result-message\" class=\"result-message\"></p>\n" +
+      "      <div class=\"result-actions\">\n" +
+      "        <button id=\"retry-button\" class=\"main-button\" type=\"button\">もう一度挑戦する</button>\n" +
+      "        <button id=\"back-to-title-button\" class=\"main-button\" type=\"button\">タイトルへ戻る</button>\n" +
+      "      </div>\n" +
+      "    </section>\n" +
+      (includeReference ? "    <p id=\"work-reference\" class=\"work-reference\"></p>\n" : "");
+  }
+
   function normalizeColor(value, label) {
     if (typeof value !== "string") {
       throw createCodeError("`" + label + "` は文字列にしてください。");
@@ -1596,63 +1682,13 @@
       "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
       "  <title>" + escapeHtmlText(pageTitle) + "</title>\n" +
       "  <style>\n" +
-      "    * { box-sizing: border-box; }\n" +
-      "    body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: 'Yu Gothic', 'Meiryo', sans-serif; background: #d9e2ec; color: #1f2937; }\n" +
-      "    main { width: min(92vw, 520px); }\n" +
-      "    .screen { padding: 28px 24px 22px; border-radius: 16px; border: 1px solid rgba(15, 23, 42, 0.12); box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12); }\n" +
-      "    .kicker { margin: 0 0 8px; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; }\n" +
-      "    h1 { margin: 0 0 18px; font-size: 26px; line-height: 1.4; }\n" +
-      "    .question-text { margin: 0 0 16px; font-size: 20px; line-height: 1.5; }\n" +
-      "    .choices { display: grid; gap: 10px; margin-bottom: 16px; }\n" +
-      "    button { font-family: inherit; font-weight: 700; cursor: pointer; }\n" +
-      "    .choice-button, .main-button { width: 100%; padding: 12px 14px; border-radius: 10px; font-size: 16px; border: 1px solid rgba(15, 23, 42, 0.22); background: transparent; }\n" +
-      "    .choice-button:disabled { cursor: not-allowed; opacity: 0.72; }\n" +
-      "    .choice-button.selected { outline: 2px solid currentColor; }\n" +
-      "    .answer-message { min-height: 28px; margin: 0 0 14px; font-size: 18px; font-weight: 700; }\n" +
-      "    .correct { color: #14843c; }\n" +
-      "    .incorrect { color: #c0342b; }\n" +
-      "    .score-text { margin: 0 0 12px; font-size: 22px; font-weight: 700; }\n" +
-      "    .result-message { margin: 0 0 18px; font-size: 16px; line-height: 1.6; }\n" +
-      "    .result-actions { display: grid; gap: 8px; }\n" +
-      "    .work-reference { margin: 16px 0 0; font-size: 12px; word-break: break-all; opacity: 0.8; }\n" +
-      "    .maker-credit { margin: 16px 0 0; font-size: 12px; font-weight: 400; line-height: 1.45; opacity: 0.78; }\n" +
-      "    .maker-credit-powered { display: block; font-size: 10px; letter-spacing: 0.08em; opacity: 0.82; }\n" +
-      "    .maker-credit a { color: inherit; text-decoration: none; font-weight: 600; }\n" +
-      "    .maker-credit a:hover { text-decoration: underline; }\n" +
-      "    .hidden { display: none; }\n" +
+      getQuizPageCss() + "\n" +
+      getQuizSurfaceCss() + "\n" +
       "  </style>\n" +
       "</head>\n" +
       "<body>\n" +
-      "  <main>\n" +
-      "    <section id=\"title-screen\" class=\"screen\">\n" +
-      "      <p class=\"kicker\">OWL JS Studio</p>\n" +
-      "      <h1 id=\"game-title\"></h1>\n" +
-      "      <p id=\"quiz-total\" class=\"kicker\">全3問</p>\n" +
-      "      <button id=\"start-button\" class=\"main-button\" type=\"button\">はじめる</button>\n" +
-      "      " + createMakerCreditHtml() + "\n" +
-      "    </section>\n" +
-      "    <section id=\"quiz-screen\" class=\"screen hidden\">\n" +
-      "      <p id=\"question-number\" class=\"kicker\"></p>\n" +
-      "      <h2 id=\"question-text\" class=\"question-text\"></h2>\n" +
-      "      <div class=\"choices\">\n" +
-      "        <button id=\"choice-0\" class=\"choice-button\" type=\"button\"></button>\n" +
-      "        <button id=\"choice-1\" class=\"choice-button\" type=\"button\"></button>\n" +
-      "        <button id=\"choice-2\" class=\"choice-button\" type=\"button\"></button>\n" +
-      "      </div>\n" +
-      "      <p id=\"answer-message\" class=\"answer-message\" aria-live=\"polite\"></p>\n" +
-      "      <button id=\"next-button\" class=\"main-button hidden\" type=\"button\">次の問題へ</button>\n" +
-      "    </section>\n" +
-      "    <section id=\"result-screen\" class=\"screen hidden\">\n" +
-      "      <p class=\"kicker\">結果発表</p>\n" +
-      "      <h2 class=\"question-text\">クイズ終了</h2>\n" +
-      "      <p id=\"score-text\" class=\"score-text\"></p>\n" +
-      "      <p id=\"result-message\" class=\"result-message\"></p>\n" +
-      "      <div class=\"result-actions\">\n" +
-      "        <button id=\"retry-button\" class=\"main-button\" type=\"button\">もう一度挑戦する</button>\n" +
-      "        <button id=\"back-to-title-button\" class=\"main-button\" type=\"button\">タイトルへ戻る</button>\n" +
-      "      </div>\n" +
-      "    </section>\n" +
-      (issuanceReference ? "    <p id=\"work-reference\" class=\"work-reference\"></p>\n" : "") +
+      "  <main class=\"quiz-surface\">\n" +
+      getQuizSurfaceMarkup({ includeReference: !!issuanceReference }) +
       "  </main>\n" +
       "  <script>\n" +
       "    const work = " + serializedWork + ";\n" +
@@ -1674,6 +1710,7 @@
       "    const startButton = document.getElementById('start-button');\n" +
       "    const retryButton = document.getElementById('retry-button');\n" +
       "    const backToTitleButton = document.getElementById('back-to-title-button');\n" +
+      "    const questionMeterFill = document.getElementById('question-meter-fill');\n" +
       "    const choiceButtons = [document.getElementById('choice-0'), document.getElementById('choice-1'), document.getElementById('choice-2')];\n" +
       "    function applyTheme(node) {\n" +
       "      node.style.backgroundColor = work.backgroundColor;\n" +
@@ -1701,6 +1738,7 @@
       "      answered = false;\n" +
       "      showOnly(quizScreen);\n" +
       "      questionNumber.textContent = '第' + (currentQuestionIndex + 1) + '問 / 全3問';\n" +
+      "      if (questionMeterFill) { questionMeterFill.style.width = (((currentQuestionIndex + 1) / quizData.length) * 100) + '%'; }\n" +
       "      questionText.textContent = quiz.question;\n" +
       "      answerMessage.textContent = '';\n" +
       "      answerMessage.className = 'answer-message';\n" +
@@ -1733,7 +1771,7 @@
       "    }\n" +
       "    function showResult() {\n" +
       "      showOnly(resultScreen);\n" +
-      "      scoreText.textContent = '正解数：' + correctCount + ' / ' + quizData.length;\n" +
+      "      scoreText.textContent = correctCount + ' / ' + quizData.length;\n" +
       "      resultMessage.textContent = correctCount === quizData.length ? '全問正解です。すばらしい！' : (correctCount >= 2 ? 'よくできました。もう一度挑戦して満点を目指しましょう。' : 'もう一度チャレンジして、JavaScriptに慣れていきましょう。');\n" +
       "    }\n" +
       "    applyTheme(titleScreen);\n" +
@@ -1814,6 +1852,9 @@
     findLearnerRgbLiteralByName: findLearnerRgbLiteralByName,
     findLearnerRgbLiteralAtOffset: findLearnerRgbLiteralAtOffset,
     createMakerCreditHtml: createMakerCreditHtml,
+    getQuizSurfaceCss: getQuizSurfaceCss,
+    getQuizPageCss: getQuizPageCss,
+    getQuizSurfaceMarkup: getQuizSurfaceMarkup,
     isSafeCssColor: isSafeCssColor,
     getContrastWarning: getContrastWarning,
     getStepClearMessage: getStepClearMessage,
