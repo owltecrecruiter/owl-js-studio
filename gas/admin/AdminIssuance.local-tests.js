@@ -385,6 +385,15 @@ test("public docs do not contain interviewer secrets", function () {
   });
 });
 
+test("print card and result share hyphen-free 8-character guidance", function () {
+  const html = adminApp.createInterviewerAppHtml();
+  assert.ok(html.indexOf("半角英数字8文字・ハイフン不要") !== -1);
+  assert.ok(html.indexOf("print-code") !== -1);
+  assert.ok(html.indexOf("result-code") !== -1);
+  assert.ok(html.indexOf("textContent=result.code") !== -1);
+  assert.strictEqual(html.indexOf("replace(/(.{4})/g"), -1);
+});
+
 let failed = 0;
 tests.forEach(function (item) {
   try {

@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.15 / interviewer issuance is a separate GAS admin app
+ * OWL JS Studio v0.9.16 / interviewer issuance is a separate GAS admin app
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -1618,6 +1618,7 @@
 
   function formatIssuanceResultCopy(result) {
     var status = result && result.deliveryStatus ? String(result.deliveryStatus) : "";
+    var fileName = result && result.fileName ? String(result.fileName) : "";
     var copy = {
       title: "発行申請が完了しました",
       body: "完成したクイズの受け取り方法をご確認ください。",
@@ -1625,6 +1626,9 @@
     };
     if (copy.mailSent === true) {
       copy.body = "完成したクイズをHTMLファイルとしてメールに添付しました。受信トレイをご確認ください。";
+      if (fileName) {
+        copy.body = copy.body + " ファイル名は「" + fileName + "」です。";
+      }
     } else if (status === "failed") {
       copy.body = "完成したクイズの受け取り方法をご確認ください。配送に失敗したため、管理者に連絡してください。";
     }
@@ -1645,7 +1649,34 @@
     if (message.indexOf("No validated quiz data") !== -1 || message.indexOf("getLastValidQuizData() is unavailable") !== -1) {
       return "完成したクイズデータがありません。エラーを直してから発行してください。";
     }
+    if (message.indexOf("発行コードが見つかりません") !== -1 || message.indexOf("発行コードが正しくありません") !== -1) {
+      return "特典コードが正しくありません。半角英数字8文字（ハイフン不要）か、以前お渡ししたコードをもう一度確認してください。";
+    }
+    if (message.indexOf("試行回数が上限") !== -1) {
+      return "特典コードの入力回数が上限に達しました。時間をおいてから、正しいコードをもう一度入力してください。";
+    }
     return message;
+  }
+
+  function createDownloadFileName(gameTitle) {
+    var fallback = "マイクイズ";
+    var maxTitle = 80;
+    var title = String(gameTitle == null ? "" : gameTitle);
+    title = title.replace(/[\u0000-\u001F\u007F]/g, "");
+    title = title.replace(/[\\/:*?"<>|]/g, "_");
+    title = title.replace(/^\.+/, "");
+    title = title.replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
+    title = title.replace(/[ .]+$/, "");
+    if (!title || title === "." || title === "..") {
+      title = fallback;
+    }
+    if (title.length > maxTitle) {
+      title = title.slice(0, maxTitle).replace(/[ .]+$/, "");
+      if (!title) {
+        title = fallback;
+      }
+    }
+    return title + ".html";
   }
 
   function getStepFocusLines(parsedData, stepNumber) {
@@ -2236,6 +2267,7 @@
     areAllStepsComplete: areAllStepsComplete,
     formatIssuanceResultCopy: formatIssuanceResultCopy,
     formatIssuanceErrorCopy: formatIssuanceErrorCopy,
+    createDownloadFileName: createDownloadFileName,
     getStepFocusLines: getStepFocusLines,
     describeIdentifier: describeIdentifier,
     createStandaloneQuizHtml: createStandaloneQuizHtml,

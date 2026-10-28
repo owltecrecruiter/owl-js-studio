@@ -1760,9 +1760,9 @@ function submitIssuanceRequest() {
     setIssuanceFormStatus("発行申請を処理中です。完了するまでお待ちください。", true);
     return;
   }
-  const code = issuanceCodeInput.value.trim();
+  const code = issuanceCodeInput.value.replace(/\s+/g, "").trim();
   if (code === "") {
-    setIssuanceFormStatus("発行コードを入力してください。", true);
+    setIssuanceFormStatus("特典コードを入力してください。半角英数字8文字で、ハイフンは不要です。", true);
     issuanceCodeInput.focus();
     return;
   }
@@ -2188,6 +2188,18 @@ receiveQuizButton.addEventListener("click", openIssuanceDialog);
 issuanceCancelButton.addEventListener("click", closeIssuanceDialog);
 issuanceDoneButton.addEventListener("click", closeIssuanceDialog);
 issuanceSubmitButton.addEventListener("click", submitIssuanceRequest);
+issuanceCodeInput.addEventListener("input", function () {
+  const start = issuanceCodeInput.selectionStart;
+  const end = issuanceCodeInput.selectionEnd;
+  const next = issuanceCodeInput.value.toUpperCase();
+  if (next === issuanceCodeInput.value) {
+    return;
+  }
+  issuanceCodeInput.value = next;
+  if (typeof start === "number" && typeof end === "number") {
+    issuanceCodeInput.setSelectionRange(start, end);
+  }
+});
 
 choiceButtons[0].addEventListener("click", function () {
   checkAnswer(0);

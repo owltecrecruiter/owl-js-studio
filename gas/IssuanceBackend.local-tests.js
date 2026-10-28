@@ -586,6 +586,8 @@ test("Drive mail delivery attaches HTML after saving to Drive", function () {
     const result = delivery.deliver({
       email: "learner@example.com",
       workId: "work_local_html",
+      fileName: "はじめての3択クイズ.html",
+      gameTitle: "はじめての3択クイズ",
       requestId: "req-mail-attach",
       html: "<!DOCTYPE html><html lang=\"ja\"><body>quiz</body></html>"
     });
@@ -593,9 +595,9 @@ test("Drive mail delivery attaches HTML after saving to Drive", function () {
     assert.strictEqual(sent.length, 1);
     assert.strictEqual(sent[0].to, "learner@example.com");
     assert.strictEqual(sent[0].subject, COMPLETED_QUIZ_MAIL_SUBJECT);
-    assert.ok(sent[0].body.indexOf("HTMLファイル") !== -1);
+    assert.ok(sent[0].body.indexOf("はじめての3択クイズ.html") !== -1);
     assert.strictEqual(sent[0].attachments.length, 1);
-    assert.ok(String(sent[0].attachments[0].getName()).indexOf(".html") !== -1);
+    assert.strictEqual(sent[0].attachments[0].getName(), "はじめての3択クイズ.html");
   } finally {
     global.DriveApp = previous.DriveApp;
     global.Utilities = previous.Utilities;
@@ -946,6 +948,126 @@ test("admin status lookup and resend work after delivery failure", function () {
   assert.ok(status.history.some(function (event) {
     return event.eventType === "delivery_resent";
   }));
+});
+
+test("new privilege codes are 8 unambiguous uppercase characters", function () {
+  const digest = {
+    sha256: function (text) {
+      return crypto.createHash("sha256").update(text, "utf8").digest("hex");
+    }
+  };
+  const seen = {};
+  for (let i = 0; i < 40; i++) {
+    const code = backendApi.createPrivilegeCode(digest, "entropy-" + i);
+    assert.strictEqual(code.length, 8);
+    assert.strictEqual(/^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/.test(code), true);
+    assert.strictEqual(/[01IOL]/.test(code), false);
+    assert.strictEqual(code.indexOf("-"), -1);
+    seen[code] = true;
+  }
+  assert.ok(Object.keys(seen).length > 1);
+  assert.strictEqual(backendApi.PRIVILEGE_CODE_ALPHABET.length, 31);
+  assert.strictEqual(Math.pow(backendApi.PRIVILEGE_CODE_ALPHABET.length, backendApi.PRIVILEGE_CODE_LENGTH), 852891037441);
+});
+
+test("generated codes omit hyphens and skip confusing characters", function () {
+  const fixture = createFixture({
+    random: {
+      generateCode: function () {
+        return backendApi.createPrivilegeCode({
+          sha256: function (text) {
+            return crypto.createHash("sha256").update(text, "utf8").digest("hex");
+          }
+        }, "interviewer-entropy");
+      },
+      generateId: function () {
+        return "newid0001";
+      }
+    }
+  });
+  const generated = fixture.backend.generateCode({
+    adminToken: ADMIN_TOKEN,
+    applicantId: "applicant-short-code",
+    email: "learner@example.com",
+    attendanceConfirmed: true
+  });
+  assert.strictEqual(generated.code.length, 8);
+  assert.strictEqual(generated.code.indexOf("-"), -1);
+  assert.strictEqual(/[01IOL]/.test(generated.code), false);
+  const stored = fixture.storage.findCodeById(generated.record.codeId);
+  assert.ok(stored.codeHash);
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(stored, "code"), false);
+});
+
+test("new codes accept lowercase and surrounding spaces", function () {
+  const fixture = createFixture();
+  generateCode(fixture, "7KMP4R8T", true);
+  const verified = fixture.backend.verifyCode({ code: "  7kmp4r8t  ", clientKey: "local" });
+  assert.strictEqual(verified.ok, true);
+  const issued = fixture.backend.issueWork({
+    code: "7kmp 4r8t",
+    requestId: "req-new-code-case",
+    email: "learner@example.com",
+    quizData: validQuizData
+  });
+  assert.strictEqual(issued.ok, true);
+  assert.strictEqual(issued.fileName, "はじめての3択クイズ.html");
+  assert.strictEqual(fixture.delivery.sent[0].fileName, "はじめての3択クイズ.html");
+  assert.strictEqual(issued.workId.indexOf("work_"), 0);
+});
+
+test("legacy hyphenated codes still verify with or without hyphens", function () {
+  const fixture = createFixture();
+  const legacy = "A1B2-C3D4-E5F6-7890-ABCD-EF12";
+  generateCode(fixture, legacy, true);
+  assert.strictEqual(fixture.backend.verifyCode({ code: legacy }).ok, true);
+  assert.strictEqual(fixture.backend.verifyCode({ code: "  a1b2-c3d4-e5f6-7890-abcd-ef12  " }).ok, true);
+  const issued = fixture.backend.issueWork({
+    code: "a1b2c3d4e5f67890abcdef12",
+    requestId: "req-legacy-compact",
+    email: "learner@example.com",
+    quizData: validQuizData
+  });
+  assert.strictEqual(issued.ok, true);
+  assertRejectsCode(function () {
+    fixture.backend.issueWork({
+      code: legacy,
+      requestId: "req-legacy-reuse",
+      email: "learner@example.com",
+      quizData: validQuizData
+    });
+  }, ERROR_CODE.CODE_USED);
+});
+
+test("used new codes cannot be reused", function () {
+  const fixture = createFixture();
+  generateCode(fixture, "8HJKMNPQ", true);
+  fixture.backend.issueWork({
+    code: "8HJKMNPQ",
+    requestId: "req-new-used-1",
+    email: "learner@example.com",
+    quizData: validQuizData
+  });
+  assertRejectsCode(function () {
+    fixture.backend.issueWork({
+      code: "8hjkmnpq",
+      requestId: "req-new-used-2",
+      email: "learner@example.com",
+      quizData: validQuizData
+    });
+  }, ERROR_CODE.CODE_USED);
+});
+
+test("download file names use the game title safely", function () {
+  assert.strictEqual(backendApi.createDownloadFileName("はじめての3択クイズ"), "はじめての3択クイズ.html");
+  assert.strictEqual(backendApi.createDownloadFileName("  動物クイズ  "), "動物クイズ.html");
+  assert.strictEqual(backendApi.createDownloadFileName("a/b:c*d?e\"f<g>h|i"), "a_b_c_d_e_f_g_h_i.html");
+  assert.strictEqual(backendApi.createDownloadFileName(""), "マイクイズ.html");
+  assert.strictEqual(backendApi.createDownloadFileName("..."), "マイクイズ.html");
+  const longTitle = "あ".repeat(120);
+  const longName = backendApi.createDownloadFileName(longTitle);
+  assert.ok(longName.length <= 85);
+  assert.ok(longName.indexOf(".html") === longName.length - 5);
 });
 
 test("existing v0.5 issuance module remains loadable", function () {

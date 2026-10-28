@@ -94,6 +94,13 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     RATE_LIMITED: "RATE_LIMITED"
   });
 
+  var PRIVILEGE_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+  var PRIVILEGE_CODE_LENGTH = 8;
+  var LEGACY_HEX_CODE_LENGTH = 24;
+  var DOWNLOAD_FILE_FALLBACK = "マイクイズ";
+  var DOWNLOAD_FILE_TITLE_MAX = 80;
+  var CODE_NOT_FOUND_MESSAGE = "発行コードが正しくありません。半角英数字8文字（ハイフン不要）か、以前お渡ししたコードをもう一度確認してください。";
+
   var QUIZ_LIMITS = Object.freeze({
     questionCount: 3,
     choiceCount: 3,
@@ -222,20 +229,20 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     function verifyCode(input) {
       var request = input || {};
       var normalizedCode = normalizeCode(request.code);
-      var codeHash = hashCode(normalizedCode);
+      var row = findStoredCode(request.code);
+      var codeHash = row ? row.codeHash : hashCode(normalizedCode);
       rateLimiter.check({
         action: "verifyCode",
         code: normalizedCode,
         codeHash: codeHash,
         clientKey: request.clientKey || ""
       });
-      var row = storage.findCodeByHash(codeHash);
       if (!row) {
         appendRejectedAttempt("", "", ERROR_CODE.CODE_NOT_FOUND, {
           codeHash: codeHash,
           clientKey: request.clientKey || ""
         });
-        throw new IssuanceError(ERROR_CODE.CODE_NOT_FOUND, "発行コードが見つかりません。");
+        throw new IssuanceError(ERROR_CODE.CODE_NOT_FOUND, CODE_NOT_FOUND_MESSAGE);
       }
       try {
         validateCodeCanIssue(row);
@@ -263,7 +270,8 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
       try {
         requestId = validateRequestId(request.requestId);
         normalizedCode = normalizeCode(request.code);
-        codeHash = hashCode(normalizedCode);
+        var matchedRow = findStoredCode(request.code);
+        codeHash = matchedRow ? matchedRow.codeHash : hashCode(normalizedCode);
         email = validateOptionalEmail(request.email);
       } catch (error) {
         appendRejectedAttempt("", safeRequestId(request.requestId), error && error.code ? error.code : ERROR_CODE.INVALID_REQUEST, {
@@ -299,12 +307,15 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
       return lockManager.acquire("issuance:code:" + codeHash, function () {
         var row = storage.findCodeByHash(codeHash);
         if (!row) {
+          row = findStoredCode(request.code);
+        }
+        if (!row) {
           recordRejectedAttempt("", requestId, ERROR_CODE.CODE_NOT_FOUND, {
             codeHash: codeHash,
             clientKey: request.clientKey || "",
             email: email
           });
-          throw new IssuanceError(ERROR_CODE.CODE_NOT_FOUND, "発行コードが見つかりません。");
+          throw new IssuanceError(ERROR_CODE.CODE_NOT_FOUND, CODE_NOT_FOUND_MESSAGE);
         }
 
         var existingRequest = storage.findRequest(requestId);
@@ -368,6 +379,7 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
 
         try {
           var workId = "work_" + random.generateId();
+          var fileName = createDownloadFileName(quizData.gameTitle);
           var html = createTrustedStandaloneQuizHtml({
             quizData: quizData,
             issuanceReference: {
@@ -385,7 +397,7 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
           row.workId = workId;
           row.updatedAt = issuedAt;
           storage.updateCode(row);
-          appendHistory(row.codeId, "work_generated", requestId, { workId: workId });
+          appendHistory(row.codeId, "work_generated", requestId, { workId: workId, fileName: fileName });
 
           var deliveryResult = attemptDelivery(function () {
             return delivery.deliver({
@@ -394,6 +406,8 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
               email: email || row.email,
               requestId: requestId,
               workId: workId,
+              fileName: fileName,
+              gameTitle: quizData.gameTitle,
               html: html
             });
           });
@@ -414,6 +428,7 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
             codeId: row.codeId,
             applicantId: row.applicantId,
             workId: workId,
+            fileName: fileName,
             issuedAt: issuedAt,
             deliveryStatus: row.deliveryStatus,
             deliveryReference: row.deliveryReference,
@@ -550,12 +565,24 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
       } else if (request.codeHash) {
         row = storage.findCodeByHash(validateBoundedString(request.codeHash, "codeHash", 128));
       } else if (request.code) {
-        row = storage.findCodeByHash(hashCode(normalizeCode(request.code)));
+        row = findStoredCode(request.code);
       }
       if (!row) {
-        throw new IssuanceError(ERROR_CODE.CODE_NOT_FOUND, "発行コードが見つかりません。");
+        throw new IssuanceError(ERROR_CODE.CODE_NOT_FOUND, CODE_NOT_FOUND_MESSAGE);
       }
       return row;
+    }
+
+    function findStoredCode(rawCode) {
+      var candidates = codeLookupCandidates(rawCode);
+      var i;
+      for (i = 0; i < candidates.length; i++) {
+        var row = storage.findCodeByHash(hashCode(candidates[i]));
+        if (row) {
+          return row;
+        }
+      }
+      return null;
     }
 
     function hashCode(code) {
@@ -797,8 +824,8 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
   function createGasRandomAdapter(digest) {
     return {
       generateCode: function () {
-        var entropy = Utilities.getUuid() + ":" + Utilities.getUuid() + ":" + new Date().getTime();
-        return digest.sha256(entropy).slice(0, 24).toUpperCase().replace(/(.{4})/g, "$1-").replace(/-$/, "");
+        var entropy = Utilities.getUuid() + ":" + Utilities.getUuid() + ":" + Utilities.getUuid() + ":" + String(new Date().getTime());
+        return createPrivilegeCode(digest, entropy);
       },
       generateId: function () {
         return Utilities.getUuid().replace(/-/g, "").slice(0, 24);
@@ -820,12 +847,13 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     function saveAndMail(message) {
       var folderId = config.get("DELIVERY_FOLDER_ID");
       var folder = folderId ? DriveApp.getFolderById(folderId) : DriveApp.getRootFolder();
-      var fileName = String(message.workId || "quiz") + ".html";
+      var fileName = message.fileName || createDownloadFileName(message.gameTitle);
       var blob = Utilities.newBlob(message.html, "text/html", fileName);
       var file = folder.createFile(blob);
       return mailExisting({
         email: message.email,
         workId: message.workId,
+        fileName: fileName,
         fileId: file.getId(),
         requestId: message.requestId,
         html: message.html
@@ -845,7 +873,7 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
       var attachment;
       try {
         attachment = file.getBlob();
-        attachment.setName(String(message.workId || file.getName() || "quiz") + ".html");
+        attachment.setName(resolveDownloadFileName(message, file));
       } catch (error) {
         return {
           ok: false,
@@ -1764,7 +1792,87 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
   }
 
   function normalizeCode(code) {
-    return validateBoundedString(code, "code", 120).toUpperCase();
+    return validateBoundedString(code, "code", 120).toUpperCase().replace(/\s+/g, "");
+  }
+
+  function codeLookupCandidates(code) {
+    var normalized = normalizeCode(code);
+    var compact = normalized.replace(/-/g, "");
+    var list = [];
+    addCandidate(list, normalized);
+    addCandidate(list, compact);
+    if (compact.length === LEGACY_HEX_CODE_LENGTH && /^[0-9A-F]+$/.test(compact)) {
+      addCandidate(list, compact.replace(/(.{4})/g, "$1-").replace(/-$/, ""));
+    }
+    return list;
+  }
+
+  function addCandidate(list, value) {
+    if (value && list.indexOf(value) === -1) {
+      list.push(value);
+    }
+  }
+
+  function hexToByteValues(hex) {
+    var bytes = [];
+    var i;
+    for (i = 0; i + 1 < hex.length; i += 2) {
+      bytes.push(parseInt(hex.slice(i, i + 2), 16));
+    }
+    return bytes;
+  }
+
+  function createPrivilegeCode(digest, entropy) {
+    var hasher = digest || createGasDigestAdapter();
+    var alphabet = PRIVILEGE_CODE_ALPHABET;
+    var limit = Math.floor(256 / alphabet.length) * alphabet.length;
+    var out = "";
+    var round = 0;
+    while (out.length < PRIVILEGE_CODE_LENGTH && round < 16) {
+      var hex = hasher.sha256("JSQUIZ_V06_PRIVILEGE:" + String(entropy) + ":" + String(round));
+      var bytes = hexToByteValues(hex);
+      var i;
+      for (i = 0; i < bytes.length && out.length < PRIVILEGE_CODE_LENGTH; i++) {
+        if (bytes[i] < limit) {
+          out += alphabet.charAt(bytes[i] % alphabet.length);
+        }
+      }
+      round += 1;
+    }
+    if (out.length !== PRIVILEGE_CODE_LENGTH) {
+      throw new IssuanceError(ERROR_CODE.STORAGE_CONFLICT, "発行コードを生成できませんでした。");
+    }
+    return out;
+  }
+
+  function createDownloadFileName(gameTitle) {
+    var title = String(gameTitle == null ? "" : gameTitle);
+    title = title.replace(/[\u0000-\u001F\u007F]/g, "");
+    title = title.replace(/[\\/:*?"<>|]/g, "_");
+    title = title.replace(/^\.+/, "");
+    title = title.replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
+    title = title.replace(/[ .]+$/, "");
+    if (!title || title === "." || title === "..") {
+      title = DOWNLOAD_FILE_FALLBACK;
+    }
+    if (title.length > DOWNLOAD_FILE_TITLE_MAX) {
+      title = title.slice(0, DOWNLOAD_FILE_TITLE_MAX).replace(/[ .]+$/, "");
+      if (!title) {
+        title = DOWNLOAD_FILE_FALLBACK;
+      }
+    }
+    return title + ".html";
+  }
+
+  function resolveDownloadFileName(message, file) {
+    var fromMessage = message && message.fileName ? String(message.fileName) : "";
+    var fromFile = file && typeof file.getName === "function" ? String(file.getName() || "") : "";
+    var fromTitle = createDownloadFileName(message && message.gameTitle);
+    var name = fromMessage || fromFile || fromTitle || (DOWNLOAD_FILE_FALLBACK + ".html");
+    if (!/\.html$/i.test(name)) {
+      name = name + ".html";
+    }
+    return name;
   }
 
   function readPositiveInt(value, defaultValue) {
@@ -1908,7 +2016,14 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     REQUEST_STATUS: REQUEST_STATUS,
     ERROR_CODE: ERROR_CODE,
     QUIZ_LIMITS: QUIZ_LIMITS,
+    PRIVILEGE_CODE_ALPHABET: PRIVILEGE_CODE_ALPHABET,
+    PRIVILEGE_CODE_LENGTH: PRIVILEGE_CODE_LENGTH,
+    CODE_NOT_FOUND_MESSAGE: CODE_NOT_FOUND_MESSAGE,
     IssuanceError: IssuanceError,
+    createPrivilegeCode: createPrivilegeCode,
+    createDownloadFileName: createDownloadFileName,
+    normalizeCode: normalizeCode,
+    codeLookupCandidates: codeLookupCandidates,
     createBackend: createBackend,
     createSpreadsheetStorage: createSpreadsheetStorage,
     createGasLockManager: createGasLockManager,

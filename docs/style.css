@@ -1314,6 +1314,13 @@ body:not(.guide-open) #activity-guide {
   border-color: var(--accent);
 }
 
+.issuance-hint {
+  margin: 6px 0 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .issuance-status {
   min-height: 1.4em;
   margin: 8px 0 0;
