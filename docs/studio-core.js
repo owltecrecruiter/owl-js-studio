@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.17 / interviewer issuance is a separate GAS admin app
+ * OWL JS Studio v0.9.18 / interviewer issuance is a separate GAS admin app
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -96,37 +96,61 @@
     {
       number: 1,
       title: "STEP 1：プログラムを読む",
-      description: "学習はここから始めます。右のプレビューを押す必要はありません。やること：ふりがなをONにして、コードを上から読みます。読むときはON、編集するときはOFFにします。変える場所：まだありません。手順：1) ふりがなON 2) 各単語の上の意味を見る（const=定数を作る、if=もし、else=そうでなければ）。確認：ふりがなONでコードが読めたらOK。コードは変えなくて大丈夫です。",
+      learn: "ふりがなをONにすると、コードの意味が上に表示されます。読むときはON、編集するときはOFFにします。",
+      description: "ふりがなをONにすると、コードの意味が上に表示されます。読むときはON、編集するときはOFFにします。",
+      tasks: [
+        "エディタ右上の「ふりがな」をONにする",
+        "各単語の上の日本語を読む"
+      ],
+      goal: "ふりがなをONにしたらクリア。実行は不要です。",
       hints: [
         "ふりがなONは読み取り専用です。コードを直すときはOFFに戻します。",
-        "`const` は「定数を作る」、`if` は「もし」、`else` は「そうでなければ」です。意味は単語の真上に出ます。",
-        "`gameTitle` や `question1` など、長い名前の上にも日本語の意味が付きます。"
+        "`const` は「定数を作る」、`if` は「もし」、`else` は「そうでなければ」です。",
+        "右のプレビューを押す必要はありません。"
       ]
     },
     {
       number: 2,
       title: "STEP 2：タイトルを変える",
-      description: "やること：ゲームのタイトル文字列だけを変えます。変える場所：`const gameTitle = \"...\";` の \" \" の中。手順：1) タイトルを書く 2) 実行する。確認：タイトル画面の見出しが変わればOK。このSTEPではタイトル以外のJavaScriptは変えません。",
+      learn: "ゲームのタイトルは `gameTitle` の文字列です。",
+      description: "ゲームのタイトルは `gameTitle` の文字列です。",
+      tasks: [
+        "`const gameTitle = \"...\";` の \" \" の中を書き換える",
+        "「実行」を押す"
+      ],
+      goal: "タイトル画面の見出しが変わったらクリア。",
       hints: [
         "変えてよいのは `gameTitle` の `\"` と `\"` の間だけです。",
         "最後の `;` は消さずに残します。",
-        "実行すると、問題ではなくタイトル画面の文字が変わります。"
+        "実行すると、タイトル画面の文字が変わります。"
       ]
     },
     {
       number: 3,
-      title: "STEP 3：背景色と文字色を変える",
-      description: "やること：背景色と文字色を、赤・緑・青の3つの数（RGB）で変えます。変える場所：`backgroundColor` と `textColor` の `rgb(赤, 緑, 青)`。手順：1) 0〜255の整数をコードに書く、または RGBの数字をクリックすると色を選べます 2) 色パレットで色とRGB数値を選ぶ 3) 実行する 4) タイトル画面と問題画面の両方を見る。確認：両方に同じ色が付いていればOK。パレットはコード編集の補助です。プレビューの色は実行後に変わります。読みにくい色なら警告が出ます。",
+      title: "STEP 3：色を変える",
+      learn: "画面の色は `backgroundColor` と `textColor` の `rgb(...)` で決まります。",
+      description: "画面の色は `backgroundColor` と `textColor` の `rgb(...)` で決まります。",
+      tasks: [
+        "`backgroundColor` または `textColor` の数字を変える（数字をクリックすると色も選べます）",
+        "「実行」を押す"
+      ],
+      goal: "タイトル画面の色が変わったらクリア。",
       hints: [
-        "`rgb(234, 243, 255)` は、赤234・緑243・青255 の光の混ぜ方です。どれも 0（光なし）〜255（最大）の整数だけ使えます。",
-        "RGBの数字をクリックすると色を選べます。同じ `rgb(...)` をコードに書き込む補助です。パレット上のRGB数値も直接編集できます。学習コードでは HTMLやCSS、`#eaf3ff` のような16進数は使いません。",
-        "実行後はプレビューの「クイズをプレイ」で問題画面へ進み、色がタイトルと同じかも確認しましょう。"
+        "`rgb(赤, 緑, 青)` の数字は、どれも 0〜255 の整数です。",
+        "RGBの数字をクリックすると色パレットが開きます。プレビューの色は実行後に変わります。",
+        "読みにくい色なら警告が出ます。問題画面の色も同じコードで変わります。"
       ]
     },
     {
       number: 4,
       title: "STEP 4：問題文を変える",
-      description: "やること：3問の問題文を自分のクイズにします。変える場所：`question1` `question2` `question3` の \" \" の中。手順：1) 3問とも書き換える 2) 実行する。確認：タイトル画面から始めて、第1問〜第3問の文が自分の内容になっていればOK。問題の数は3問のままです。",
+      learn: "3問の問題文は `question1` `question2` `question3` です。",
+      description: "3問の問題文は `question1` `question2` `question3` です。",
+      tasks: [
+        "3問すべての `\" \"` の中を書き換える",
+        "「実行」を押す"
+      ],
+      goal: "第1問〜第3問の文が自分の内容になったらクリア。",
       hints: [
         "4問目は追加できません。`question4` は使えません。",
         "答えが3つの選択肢から選べる文にすると作りやすいです。",
@@ -136,27 +160,35 @@
     {
       number: 5,
       title: "STEP 5：選択肢と正解を変える",
-      description: "同じ問題で、選択肢の文章と正解番号の両方を変えます。",
-      stages: [
-        {
-          title: "① 選択肢の文章を変更する",
-          body: "どれか1問の choice1_1 / choice1_2 / choice1_3（または第2問・第3問）の \" \" の中を、新しい答えの候補に書き換えます。"
-        },
-        {
-          title: "② 変更した選択肢に合わせて正解番号を変更する",
-          body: "同じ問題の selectedIndex1 === 番号（第2問なら selectedIndex2）の番号を、新しい正解の位置に合わせます。選択肢は上から 0・1・2 です。1番上が0、2番目が1、3番目が2です。"
-        },
-        {
-          title: "③ 「実行」を押し、プレビューで新しい正解を選んで「正解！」を確認する",
-          body: "実行したあと、右のプレビューで「クイズをプレイ」を押し、変更した問題で新しい正解を選びます。「正解！」と出ればこのSTEPはクリアです。"
-        }
+      learn: "同じ問題で、選択肢と正解番号の両方を変えます。",
+      description: "同じ問題で、選択肢と正解番号の両方を変えます。",
+      tasks: [
+        "どれか1問の選択肢（`choice1_1` など）を新しい答えに書き換える",
+        "同じ問題の正解番号（`selectedIndex1 === 番号`）を新しい正解の位置に合わせる",
+        "「実行」を押す",
+        "プレビューで「クイズをプレイ」し、新しい正解を選んで「正解！」を確認する"
       ],
-      example: "例（初期の第1問）：「日本一高い山は？」の選択肢は、上から 0＝富士山、1＝高尾山、2＝筑波山 です。いまの正解番号は 0（富士山）です。たとえば選択肢を「エベレスト / 富士山 / キリマンジャロ」に変えたら、富士山は上から2番目なので正解番号を 1 に変えます。同じ問題の選択肢と正解番号をセットで変えてください。",
+      exampleCompare: {
+        question: "日本一高い山は？",
+        before: [
+          { index: 0, text: "富士山", correct: true },
+          { index: 1, text: "高尾山", correct: false },
+          { index: 2, text: "筑波山", correct: false }
+        ],
+        after: [
+          { index: 0, text: "エベレスト", correct: false },
+          { index: 1, text: "富士山", correct: true },
+          { index: 2, text: "キリマンジャロ", correct: false }
+        ],
+        correctIndexFrom: 0,
+        correctIndexTo: 1,
+        indexNote: "コードの 0・1・2 は、上から1番目・2番目・3番目です。"
+      },
       goal: "選択肢と正解番号を変更し、実行後、新しい正解を選んで『正解！』が表示されたらクリア",
       hints: [
-        "第1問なら choice1_1 などと selectedIndex1、第2問なら choice2_1 と selectedIndex2 のように、同じ問題の両方を変えます。別の問題の変更を組み合わせてもクリアになりません。",
-        "正解番号は 0が1番上、1が2番目、2が3番目です。1始まり（1,2,3）では書けません。",
-        "実行したあと、プレビューで「クイズをプレイ」を押し、変更した問題で新しい正解を選んで「正解！」が出るまで、このSTEPはクリアになりません。"
+        "第1問なら `choice1_1` と `selectedIndex1` のように、同じ問題の両方を変えます。",
+        "正解番号は 0が1番上、1が2番目、2が3番目です。1,2,3 では書けません。",
+        "「実行」と「正解！」の確認は別の操作です。どちらも必要です。"
       ]
     }
   ];
@@ -1091,30 +1123,27 @@
     if (!logoSrc) {
       return "";
     }
-    return "<img class=\"studio-logo\" src=\"" + escapeHtmlText(logoSrc) + "\" alt=\"" + escapeHtmlText(MAKER_CREDIT_BRAND) + "\">";
+    return "<img class=\"credit-mark\" src=\"" + escapeHtmlText(logoSrc) + "\" alt=\"\">";
   }
 
-  function createMakerCreditHtml() {
+  function createMakerCreditHtml(logoSrc) {
     return "<p class=\"maker-credit\">" +
-      "<span class=\"maker-credit-powered\">" + escapeHtmlText(MAKER_CREDIT_POWERED) + " " + escapeHtmlText(MAKER_CREDIT_BRAND) + "</span>" +
-      "<span class=\"company-legal\">" + escapeHtmlText(COMPANY_LEGAL_NAME) + "</span>" +
-      "<a href=\"" + COMPANY_URL + "\" target=\"_blank\" rel=\"noopener noreferrer\">会社ホームページ</a></p>";
+      createStudioLogoHtml(logoSrc) +
+      "<a href=\"" + COMPANY_URL + "\" target=\"_blank\" rel=\"noopener noreferrer\">" + escapeHtmlText(COMPANY_LEGAL_NAME) + "</a></p>";
   }
 
   function createResultBrandHtml() {
-    return "<p class=\"result-celebrate\">学習を最後まで進めました。オリジナルクイズの完成、おめでとうございます。</p>" +
-      "<p class=\"result-company\">このクイズは、" + escapeHtmlText(COMPANY_LEGAL_NAME) + "のプログラミング学習特典「" + escapeHtmlText(STUDIO_PRODUCT_NAME) + "」で作成されました。</p>" +
-      "<p class=\"maker-credit\"><a href=\"" + COMPANY_URL + "\" target=\"_blank\" rel=\"noopener noreferrer\">" + escapeHtmlText(COMPANY_LEGAL_NAME) + " のホームページ</a></p>";
+    return "";
   }
 
   function getQuizSurfaceCss() {
     return [
       ".quiz-surface { width: 100%; max-width: 480px; font-family: 'Yu Gothic', 'Meiryo', sans-serif; }",
-      ".quiz-surface .screen { padding: 20px 18px 16px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(15, 23, 42, 0.18); }",
+      ".quiz-surface .screen { padding: 28px 22px 20px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(15, 23, 42, 0.18); }",
       ".quiz-surface .title-screen { text-align: center; }",
-      ".quiz-surface .kicker { margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; opacity: 0.72; }",
-      ".quiz-surface .game-title { margin: 0 0 10px; font-size: 26px; line-height: 1.35; font-weight: 700; }",
-      ".quiz-surface .quiz-total { margin: 0 0 18px; font-size: 13px; font-weight: 700; }",
+      ".quiz-surface .kicker { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; opacity: 0.62; }",
+      ".quiz-surface .game-title { margin: 8px 0 12px; font-size: 32px; line-height: 1.3; font-weight: 800; }",
+      ".quiz-surface .quiz-total { margin: 0 0 28px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; opacity: 0.64; }",
       ".quiz-surface .question-number { display: inline-block; margin: 0 0 8px; padding: 3px 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; border: 1px solid currentColor; }",
       ".quiz-surface .question-meter { position: relative; height: 4px; margin: 0 0 14px; overflow: hidden; }",
       ".quiz-surface .question-meter::before { content: \"\"; position: absolute; inset: 0; background: currentColor; opacity: 0.18; }",
@@ -1129,7 +1158,7 @@
       ".quiz-surface .choice-button.selected { outline: 2px solid currentColor; }",
       ".quiz-surface .choice-button.selected:disabled { opacity: 1; }",
       ".quiz-surface .main-button { padding: 12px 14px; font-size: 15px; }",
-      ".quiz-surface .start-button { padding: 14px 16px; font-size: 16px; letter-spacing: 0.08em; border-width: 2px; }",
+      ".quiz-surface .start-button { padding: 16px 18px; font-size: 17px; letter-spacing: 0.08em; border-width: 2px; }",
       ".quiz-surface .answer-message { min-height: 24px; margin: 0 0 12px; font-size: 15px; font-weight: 700; }",
       ".quiz-surface .correct { color: #14843c; }",
       ".quiz-surface .incorrect { color: #c0342b; }",
@@ -1138,17 +1167,11 @@
       ".quiz-surface .result-message { margin: 0 0 16px; font-size: 14px; line-height: 1.6; }",
       ".quiz-surface .result-actions { display: grid; gap: 8px; }",
       ".quiz-surface .work-reference { margin: 16px 0 0; font-size: 12px; word-break: break-all; opacity: 0.8; }",
-      ".quiz-surface .maker-credit { margin: 16px 0 0; font-size: 12px; font-weight: 400; line-height: 1.45; opacity: 0.78; }",
-      ".quiz-surface .maker-credit-powered { display: block; font-size: 10px; letter-spacing: 0.08em; opacity: 0.82; }",
-      ".quiz-surface .company-legal { display: block; margin-top: 4px; }",
-      ".quiz-surface .maker-credit a { color: inherit; text-decoration: none; font-weight: 600; }",
+      ".quiz-surface .maker-credit { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 32px 0 0; font-size: 11px; font-weight: 600; line-height: 1.4; opacity: 0.62; }",
+      ".quiz-surface .maker-credit a { color: inherit; text-decoration: none; }",
       ".quiz-surface .maker-credit a:hover { text-decoration: underline; }",
       ".quiz-surface .maker-credit a:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }",
-      ".quiz-surface .studio-logo { display: block; width: min(168px, 64%); height: auto; margin: 0 auto 10px; }",
-      ".quiz-surface .studio-product-name { margin: 0 0 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; opacity: 0.8; }",
-      ".quiz-surface .quiz-brand-mark { margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; opacity: 0.7; }",
-      ".quiz-surface .result-celebrate { margin: 0 0 10px; font-size: 14px; line-height: 1.6; }",
-      ".quiz-surface .result-company { margin: 0 0 8px; font-size: 12px; line-height: 1.6; opacity: 0.86; }",
+      ".quiz-surface .credit-mark { display: block; width: 22px; height: 22px; object-fit: contain; }",
       ".quiz-surface .hidden { display: none; }"
     ].join("\n");
   }
@@ -1167,20 +1190,16 @@
     var questionHeading = config.questionHeading || "h2";
     var resultHeading = config.resultHeading || "h2";
     var logoSrc = config.logoSrc || "";
-    var logoHtml = createStudioLogoHtml(logoSrc);
+    var startLabel = config.startLabel || "はじめる";
     return "    <!-- タイトル画面 -->\n" +
       "    <section id=\"title-screen\" class=\"screen title-screen\">\n" +
-      (logoHtml ? "      " + logoHtml + "\n" : "") +
-      "      <p class=\"studio-product-name\">" + escapeHtmlText(STUDIO_PRODUCT_NAME) + "</p>\n" +
-      "      <p class=\"kicker\">3択クイズ</p>\n" +
       "      <" + titleHeading + " id=\"game-title\" class=\"game-title\"></" + titleHeading + ">\n" +
       "      <p id=\"quiz-total\" class=\"quiz-total\">全3問</p>\n" +
-      "      <button id=\"start-button\" class=\"main-button start-button\" type=\"button\">はじめる</button>\n" +
-      "      " + createMakerCreditHtml() + "\n" +
+      "      <button id=\"start-button\" class=\"main-button start-button\" type=\"button\">" + escapeHtmlText(startLabel) + "</button>\n" +
+      "      " + createMakerCreditHtml(logoSrc) + "\n" +
       "    </section>\n" +
       "    <!-- クイズ画面 -->\n" +
       "    <section id=\"quiz-screen\" class=\"screen quiz-screen hidden\">\n" +
-      "      <p class=\"quiz-brand-mark\">" + escapeHtmlText(STUDIO_PRODUCT_NAME) + "</p>\n" +
       "      <p id=\"question-number\" class=\"question-number\"></p>\n" +
       "      <div class=\"question-meter\" aria-hidden=\"true\"><span id=\"question-meter-fill\" class=\"question-meter-fill\"></span></div>\n" +
       "      <" + questionHeading + " id=\"question-text\" class=\"question-text\"></" + questionHeading + ">\n" +
@@ -1203,7 +1222,6 @@
       "        <button id=\"retry-button\" class=\"main-button\" type=\"button\">もう一度挑戦する</button>\n" +
       "        <button id=\"back-to-title-button\" class=\"main-button\" type=\"button\">タイトルへ戻る</button>\n" +
       "      </div>\n" +
-      "      " + createResultBrandHtml() + "\n" +
       "    </section>\n";
   }
 

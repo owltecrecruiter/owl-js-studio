@@ -329,8 +329,9 @@ test("valid quiz data generates standalone HTML", function () {
   assert.strictEqual(/<script\s+src=/.test(html), false);
   assert.strictEqual(/\beval\s*\(/.test(html), false);
   assert.strictEqual(/\bnew Function\b/.test(html), false);
-  assert.ok(html.includes("Powered by"));
-  assert.ok(html.includes("OWL Technology"));
+  assert.ok(html.includes("はじめる"));
+  assert.strictEqual(html.indexOf("Powered by"), -1);
+  assert.strictEqual(html.indexOf("studio-product-name"), -1);
   assert.strictEqual(html.indexOf("制作ツール提供："), -1);
   assert.ok(html.includes("https://owl-tec.co.jp/"));
   assert.ok(html.includes("rel=\"noopener noreferrer\""));

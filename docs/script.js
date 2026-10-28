@@ -706,10 +706,10 @@ function renderStepGuide(parsed, parseError) {
   const step = STEP_GUIDE[currentStep - 1];
   const result = evaluateStepProgress(parsed, currentStep, parseError, initialQuizSnapshot, getStepEvidence());
   stepTitle.textContent = step.title;
-  stepDescription.textContent = step.description;
-  renderStepStages(step);
-  renderStepExtra(stepExample, step.example || "");
-  renderStepExtra(stepGoal, step.goal ? "達成条件：" + step.goal : "");
+  stepDescription.textContent = step.learn || step.description || "";
+  renderStepTasks(step);
+  renderStepExample(step);
+  stepGoal.textContent = step.goal || "";
   stepProgress.textContent = result.message;
   stepProgress.className = result.done ? "step-progress complete" : "step-progress";
 
@@ -717,44 +717,96 @@ function renderStepGuide(parsed, parseError) {
   renderCompletionGuide(parsed, parseError);
 }
 
-function renderStepStages(step) {
+function renderStepTasks(step) {
   clearChildren(stepStages);
-  const stages = step && Array.isArray(step.stages) ? step.stages : [];
-  if (stages.length === 0) {
+  const tasks = step && Array.isArray(step.tasks) ? step.tasks : [];
+  if (tasks.length === 0) {
     stepStages.hidden = true;
     stepStages.setAttribute("hidden", "");
     return;
   }
   stepStages.hidden = false;
   stepStages.removeAttribute("hidden");
-  for (let i = 0; i < stages.length; i++) {
+  for (let i = 0; i < tasks.length; i++) {
     const item = document.createElement("li");
-    item.className = "step-stage";
-    const title = document.createElement("p");
-    title.className = "step-stage-title";
-    title.textContent = stages[i].title;
-    const body = document.createElement("p");
-    body.className = "step-stage-body";
-    body.textContent = stages[i].body;
-    item.appendChild(title);
-    item.appendChild(body);
+    item.textContent = tasks[i];
     stepStages.appendChild(item);
   }
 }
 
-function renderStepExtra(element, text) {
-  if (!element) {
+function renderStepExample(step) {
+  const exampleBlock = document.getElementById("step-example-block");
+  clearChildren(stepExample);
+  if (!step || !step.exampleCompare) {
+    if (exampleBlock) {
+      exampleBlock.hidden = true;
+      exampleBlock.setAttribute("hidden", "");
+    }
     return;
   }
-  if (text) {
-    element.hidden = false;
-    element.removeAttribute("hidden");
-    element.textContent = text;
-  } else {
-    element.hidden = true;
-    element.setAttribute("hidden", "");
-    element.textContent = "";
+  if (exampleBlock) {
+    exampleBlock.hidden = false;
+    exampleBlock.removeAttribute("hidden");
   }
+  stepExample.appendChild(createChoiceCompare(step.exampleCompare));
+}
+
+function createChoiceCompare(example) {
+  const wrap = document.createElement("div");
+  wrap.className = "choice-compare";
+
+  const question = document.createElement("p");
+  question.className = "choice-compare-question";
+  question.textContent = "例（初期の第1問）：" + example.question;
+  wrap.appendChild(question);
+
+  wrap.appendChild(createChoiceCompareColumn("変更前", example.before, false));
+  wrap.appendChild(createChoiceCompareColumn("変更後", example.after, true));
+
+  const indexLine = document.createElement("p");
+  indexLine.className = "choice-compare-index";
+  indexLine.textContent = "正解番号：" + example.correctIndexFrom + " → " + example.correctIndexTo;
+  wrap.appendChild(indexLine);
+
+  if (example.indexNote) {
+    const note = document.createElement("p");
+    note.className = "choice-compare-note";
+    note.textContent = example.indexNote;
+    wrap.appendChild(note);
+  }
+  return wrap;
+}
+
+function createChoiceCompareColumn(heading, choices, isAfter) {
+  const col = document.createElement("div");
+  col.className = isAfter ? "choice-compare-col is-after" : "choice-compare-col";
+  const title = document.createElement("p");
+  title.className = "choice-compare-heading";
+  title.textContent = heading;
+  col.appendChild(title);
+  const list = document.createElement("ol");
+  list.className = "choice-compare-list";
+  for (let i = 0; i < choices.length; i++) {
+    const choice = choices[i];
+    const item = document.createElement("li");
+    item.className = choice.correct ? "choice-compare-item is-correct" : "choice-compare-item";
+    const index = document.createElement("span");
+    index.className = "choice-index";
+    index.textContent = String(choice.index);
+    const text = document.createElement("span");
+    text.textContent = choice.text;
+    item.appendChild(index);
+    item.appendChild(text);
+    if (choice.correct) {
+      const tag = document.createElement("span");
+      tag.className = "correct-tag";
+      tag.textContent = "正解";
+      item.appendChild(tag);
+    }
+    list.appendChild(item);
+  }
+  col.appendChild(list);
+  return col;
 }
 
 function renderCompletionGuide(parsed, parseError) {
