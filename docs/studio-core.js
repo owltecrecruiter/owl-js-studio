@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.13 / interviewer issuance is a separate GAS admin app
+ * OWL JS Studio v0.9.14 / interviewer issuance is a separate GAS admin app
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -1448,6 +1448,11 @@
     };
   }
 
+  function hasCurrentRunEvidence(evidence) {
+    var extra = evidence || {};
+    return extra.editorMatchesLastRun === true && extra.lastRunWork != null;
+  }
+
   function evaluateStepProgress(parsedData, stepNumber, parseError, initialWork, evidence) {
     if (parsedData === null || parseError !== null) {
       return {
@@ -1476,24 +1481,45 @@
 
     var work = parsedData.work;
     var i;
+    var ranCurrentCode = hasCurrentRunEvidence(evidence);
 
     if (stepNumber === 2) {
       var titleChanged = work.gameTitle !== initialWork.gameTitle;
+      if (titleChanged !== true) {
+        return {
+          done: false,
+          message: "未達成：`gameTitle` の \" \" の中だけを初期値から変えて実行しましょう。"
+        };
+      }
+      if (ranCurrentCode !== true) {
+        return {
+          done: false,
+          message: "未達成：タイトルを変えたら「実行」を押して確認しましょう。"
+        };
+      }
       return {
-        done: titleChanged,
-        message: titleChanged
-          ? "達成：ゲームのタイトルが変更されています。実行してタイトル画面を確認しましょう。"
-          : "未達成：`gameTitle` の \" \" の中だけを初期値から変えて実行しましょう。"
+        done: true,
+        message: "達成：ゲームのタイトルを変えて実行しました。"
       };
     }
 
     if (stepNumber === 3) {
       var colorChanged = work.backgroundColor !== initialWork.backgroundColor || work.textColor !== initialWork.textColor;
+      if (colorChanged !== true) {
+        return {
+          done: false,
+          message: "未達成：`backgroundColor` と `textColor` を `rgb(赤, 緑, 青)` の整数3つに変えてみましょう。"
+        };
+      }
+      if (ranCurrentCode !== true) {
+        return {
+          done: false,
+          message: "未達成：色を変えたら「実行」を押して、タイトル画面と問題画面を確認しましょう。"
+        };
+      }
       return {
-        done: colorChanged,
-        message: colorChanged
-          ? "達成：色の設定が変更されています。タイトル画面と問題画面の両方を確認しましょう。"
-          : "未達成：`backgroundColor` と `textColor` を `rgb(赤, 緑, 青)` の整数3つに変えてみましょう。"
+        done: true,
+        message: "達成：色の設定を変えて実行しました。"
       };
     }
 
@@ -1504,11 +1530,21 @@
           changedQuestions = changedQuestions + 1;
         }
       }
+      if (changedQuestions !== WORK_LIMITS.questionCount) {
+        return {
+          done: false,
+          message: "未達成：`question1`〜`question3` の問題文を自分のクイズに変えましょう（変更済み " + changedQuestions + "/3）。"
+        };
+      }
+      if (ranCurrentCode !== true) {
+        return {
+          done: false,
+          message: "未達成：3問の問題文を変えたら「実行」を押して確認しましょう。"
+        };
+      }
       return {
-        done: changedQuestions === WORK_LIMITS.questionCount,
-        message: changedQuestions === WORK_LIMITS.questionCount
-          ? "達成：3問の問題文が変更されています。実行してプレビューで確認しましょう。"
-          : "未達成：`question1`〜`question3` の問題文を自分のクイズに変えましょう（変更済み " + changedQuestions + "/3）。"
+        done: true,
+        message: "達成：3問の問題文を変えて実行しました。"
       };
     }
 
@@ -2179,6 +2215,7 @@
     getStep5QuestionStates: getStep5QuestionStates,
     hasPairedStep5Question: hasPairedStep5Question,
     questionHasPairedStep5Edits: questionHasPairedStep5Edits,
+    hasCurrentRunEvidence: hasCurrentRunEvidence,
     evaluateStepProgress: evaluateStepProgress,
     areAllStepsComplete: areAllStepsComplete,
     formatIssuanceResultCopy: formatIssuanceResultCopy,

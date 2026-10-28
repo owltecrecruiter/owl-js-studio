@@ -960,6 +960,8 @@ function applyCodeToPreview() {
     } else {
       showErrors(["コードを確認してください。"]);
     }
+    updateLearningSupport();
+    announceNewlyCompletedSteps();
     updatePreviewChrome();
   }
 }
