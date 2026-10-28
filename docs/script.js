@@ -66,6 +66,9 @@ const tokenDetail = document.getElementById("token-detail");
 const stepButtons = document.getElementById("step-buttons");
 const stepTitle = document.getElementById("step-title");
 const stepDescription = document.getElementById("step-description");
+const stepStages = document.getElementById("step-stages");
+const stepExample = document.getElementById("step-example");
+const stepGoal = document.getElementById("step-goal");
 const stepProgress = document.getElementById("step-progress");
 const hintButton = document.getElementById("hint-button");
 const hintList = document.getElementById("hint-list");
@@ -143,7 +146,7 @@ let latestParsedSupportData = null;
 let initialQuizSnapshot = null;
 let currentStep = 1;
 let consoleResizeState = null;
-let guideIsOpen = false;
+let guideIsOpen = true;
 let applyingColorPicker = false;
 let applyingHistory = false;
 const editorHistory = createCodeHistory({ cap: 100 });
@@ -704,11 +707,54 @@ function renderStepGuide(parsed, parseError) {
   const result = evaluateStepProgress(parsed, currentStep, parseError, initialQuizSnapshot, getStepEvidence());
   stepTitle.textContent = step.title;
   stepDescription.textContent = step.description;
+  renderStepStages(step);
+  renderStepExtra(stepExample, step.example || "");
+  renderStepExtra(stepGoal, step.goal ? "達成条件：" + step.goal : "");
   stepProgress.textContent = result.message;
   stepProgress.className = result.done ? "step-progress complete" : "step-progress";
 
   renderHints();
   renderCompletionGuide(parsed, parseError);
+}
+
+function renderStepStages(step) {
+  clearChildren(stepStages);
+  const stages = step && Array.isArray(step.stages) ? step.stages : [];
+  if (stages.length === 0) {
+    stepStages.hidden = true;
+    stepStages.setAttribute("hidden", "");
+    return;
+  }
+  stepStages.hidden = false;
+  stepStages.removeAttribute("hidden");
+  for (let i = 0; i < stages.length; i++) {
+    const item = document.createElement("li");
+    item.className = "step-stage";
+    const title = document.createElement("p");
+    title.className = "step-stage-title";
+    title.textContent = stages[i].title;
+    const body = document.createElement("p");
+    body.className = "step-stage-body";
+    body.textContent = stages[i].body;
+    item.appendChild(title);
+    item.appendChild(body);
+    stepStages.appendChild(item);
+  }
+}
+
+function renderStepExtra(element, text) {
+  if (!element) {
+    return;
+  }
+  if (text) {
+    element.hidden = false;
+    element.removeAttribute("hidden");
+    element.textContent = text;
+  } else {
+    element.hidden = true;
+    element.setAttribute("hidden", "");
+    element.textContent = "";
+  }
 }
 
 function renderCompletionGuide(parsed, parseError) {
@@ -1843,11 +1889,14 @@ function initializeLearningState() {
 function setGuideOpen(open) {
   guideIsOpen = open === true;
   guideSidebar.classList.toggle("hidden", guideIsOpen === false);
+  document.body.classList.toggle("guide-open", guideIsOpen);
   activityGuide.classList.toggle("active", guideIsOpen);
   activityEditor.classList.toggle("active", guideIsOpen === false);
   activityGuide.setAttribute("aria-pressed", guideIsOpen ? "true" : "false");
+  activityGuide.setAttribute("aria-expanded", guideIsOpen ? "true" : "false");
   activityEditor.setAttribute("aria-pressed", guideIsOpen ? "false" : "true");
   activityGuide.setAttribute("aria-label", guideIsOpen ? "学習ガイドを閉じる" : "学習ガイドを開く");
+  activityGuide.setAttribute("title", guideIsOpen ? "学習ガイドを閉じる" : "学習ガイドを開く（この「ガイド」ボタン）");
 }
 
 function getCursorLineAndColumn(source, cursorIndex) {
@@ -2161,8 +2210,8 @@ previewForwardButton.addEventListener("click", previewGoForward);
 previewRestartButton.addEventListener("click", previewRestartFromTitle);
 
 initializeLearningState();
-setGuideOpen(false);
-appendConsole("info", "初期コードを読み込みました。変更できるのはタイトル・色・問題文・選択肢と正解番号だけです。");
+setGuideOpen(true);
+appendConsole("info", "初期コードを読み込みました。左の学習ガイドの STEP 1 から進めましょう。プレビューは作成中のクイズを試す画面です。");
 setEditorCode(INITIAL_CODE);
 resetEditorHistoryBaseline();
 applyCodeToPreview();

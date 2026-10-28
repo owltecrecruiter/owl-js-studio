@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.14 / interviewer issuance is a separate GAS admin app
+ * OWL JS Studio v0.9.15 / interviewer issuance is a separate GAS admin app
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -56,10 +56,10 @@
     "const textColor = \"rgb(31, 41, 55)\";",
     "",
     "// 第1問",
-    "const question1 = \"JavaScriptで文字を画面に表示するときに使う命令はどれ？\";",
-    "const choice1_1 = \"console.log\";",
-    "const choice1_2 = \"style.color\";",
-    "const choice1_3 = \"border-radius\";",
+    "const question1 = \"日本一高い山は？\";",
+    "const choice1_1 = \"富士山\";",
+    "const choice1_2 = \"高尾山\";",
+    "const choice1_3 = \"筑波山\";",
     "",
     "if (selectedIndex1 === 0) {",
     "  result1 = \"正解！\";",
@@ -68,24 +68,24 @@
     "}",
     "",
     "// 第2問",
-    "const question2 = \"変数を作るときに使うキーワードはどれ？\";",
-    "const choice2_1 = \"let\";",
-    "const choice2_2 = \"click\";",
-    "const choice2_3 = \"window\";",
+    "const question2 = \"日本の首都は？\";",
+    "const choice2_1 = \"大阪\";",
+    "const choice2_2 = \"東京\";",
+    "const choice2_3 = \"京都\";",
     "",
-    "if (selectedIndex2 === 0) {",
+    "if (selectedIndex2 === 1) {",
     "  result2 = \"正解！\";",
     "} else {",
     "  result2 = \"不正解\";",
     "}",
     "",
     "// 第3問",
-    "const question3 = \"条件によって処理を分けるときに使う書き方はどれ？\";",
-    "const choice3_1 = \"if / else\";",
-    "const choice3_2 = \"font-size\";",
-    "const choice3_3 = \"padding\";",
+    "const question3 = \"1週間は何日？\";",
+    "const choice3_1 = \"5日\";",
+    "const choice3_2 = \"7日\";",
+    "const choice3_3 = \"10日\";",
     "",
-    "if (selectedIndex3 === 0) {",
+    "if (selectedIndex3 === 1) {",
     "  result3 = \"正解！\";",
     "} else {",
     "  result3 = \"不正解\";",
@@ -96,7 +96,7 @@
     {
       number: 1,
       title: "STEP 1：プログラムを読む",
-      description: "やること：ふりがなをONにして、コードを上から読みます。読むときはON、編集するときはOFFにします。変える場所：まだありません。手順：1) ふりがなON 2) 各単語の上の意味を見る（const=定数を作る、if=もし、else=そうでなければ）。確認：ふりがなONでコードが読めたらOK。コードは変えなくて大丈夫です。",
+      description: "学習はここから始めます。右のプレビューを押す必要はありません。やること：ふりがなをONにして、コードを上から読みます。読むときはON、編集するときはOFFにします。変える場所：まだありません。手順：1) ふりがなON 2) 各単語の上の意味を見る（const=定数を作る、if=もし、else=そうでなければ）。確認：ふりがなONでコードが読めたらOK。コードは変えなくて大丈夫です。",
       hints: [
         "ふりがなONは読み取り専用です。コードを直すときはOFFに戻します。",
         "`const` は「定数を作る」、`if` は「もし」、`else` は「そうでなければ」です。意味は単語の真上に出ます。",
@@ -120,7 +120,7 @@
       hints: [
         "`rgb(234, 243, 255)` は、赤234・緑243・青255 の光の混ぜ方です。どれも 0（光なし）〜255（最大）の整数だけ使えます。",
         "RGBの数字をクリックすると色を選べます。同じ `rgb(...)` をコードに書き込む補助です。パレット上のRGB数値も直接編集できます。学習コードでは HTMLやCSS、`#eaf3ff` のような16進数は使いません。",
-        "実行後は「はじめる」で問題画面へ進み、色がタイトルと同じかも確認しましょう。"
+        "実行後はプレビューの「クイズをプレイ」で問題画面へ進み、色がタイトルと同じかも確認しましょう。"
       ]
     },
     {
@@ -136,11 +136,27 @@
     {
       number: 5,
       title: "STEP 5：選択肢と正解を変える",
-      description: "やること：同じ問題で、選択肢の文字と正解番号の両方を変えます。変える場所：例）`choice1_1` と `selectedIndex1 === 0` の右側の番号。番号は 0始まりです（0=1番目、1=2番目、2=3番目）。手順：1) どれか1問の選択肢を変える 2) 同じ問題の正解番号を別の 0/1/2 に変える 3) 実行する 4) その問題で新しい正解を選ぶ 5) 「正解！」と出ればこのSTEPはクリアです。",
+      description: "同じ問題で、選択肢の文章と正解番号の両方を変えます。",
+      stages: [
+        {
+          title: "① 選択肢の文章を変更する",
+          body: "どれか1問の choice1_1 / choice1_2 / choice1_3（または第2問・第3問）の \" \" の中を、新しい答えの候補に書き換えます。"
+        },
+        {
+          title: "② 変更した選択肢に合わせて正解番号を変更する",
+          body: "同じ問題の selectedIndex1 === 番号（第2問なら selectedIndex2）の番号を、新しい正解の位置に合わせます。選択肢は上から 0・1・2 です。1番上が0、2番目が1、3番目が2です。"
+        },
+        {
+          title: "③ 「実行」を押し、プレビューで新しい正解を選んで「正解！」を確認する",
+          body: "実行したあと、右のプレビューで「クイズをプレイ」を押し、変更した問題で新しい正解を選びます。「正解！」と出ればこのSTEPはクリアです。"
+        }
+      ],
+      example: "例（初期の第1問）：「日本一高い山は？」の選択肢は、上から 0＝富士山、1＝高尾山、2＝筑波山 です。いまの正解番号は 0（富士山）です。たとえば選択肢を「エベレスト / 富士山 / キリマンジャロ」に変えたら、富士山は上から2番目なので正解番号を 1 に変えます。同じ問題の選択肢と正解番号をセットで変えてください。",
+      goal: "選択肢と正解番号を変更し、実行後、新しい正解を選んで『正解！』が表示されたらクリア",
       hints: [
-        "第1問なら `choice1_1` などと `selectedIndex1`、第2問なら `choice2_1` と `selectedIndex2` のように、同じ問題の両方を変えます。別の問題の変更を組み合わせてもクリアになりません。",
-        "正解番号は 0が1番目、1が2番目、2が3番目です。1始まり（1,2,3）では書けません。",
-        "実行したあと、変更した問題で新しい正解を押して「正解！」が出るまで、このSTEPはクリアになりません。"
+        "第1問なら choice1_1 などと selectedIndex1、第2問なら choice2_1 と selectedIndex2 のように、同じ問題の両方を変えます。別の問題の変更を組み合わせてもクリアになりません。",
+        "正解番号は 0が1番上、1が2番目、2が3番目です。1始まり（1,2,3）では書けません。",
+        "実行したあと、プレビューで「クイズをプレイ」を押し、変更した問題で新しい正解を選んで「正解！」が出るまで、このSTEPはクリアになりません。"
       ]
     }
   ];
