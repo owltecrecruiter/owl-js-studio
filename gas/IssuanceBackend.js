@@ -91,7 +91,8 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     REQUEST_CONFLICT: "REQUEST_CONFLICT",
     STORAGE_CONFLICT: "STORAGE_CONFLICT",
     LOCK_UNAVAILABLE: "LOCK_UNAVAILABLE",
-    RATE_LIMITED: "RATE_LIMITED"
+    RATE_LIMITED: "RATE_LIMITED",
+    OUTPUT_FOLDER_UNAVAILABLE: "OUTPUT_FOLDER_UNAVAILABLE"
   });
 
   var PRIVILEGE_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -99,6 +100,10 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
   var LEGACY_HEX_CODE_LENGTH = 24;
   var DOWNLOAD_FILE_FALLBACK = "マイクイズ";
   var DOWNLOAD_FILE_TITLE_MAX = 80;
+  var DOWNLOAD_FILE_NAME_MAX = 60;
+  var DEFAULT_OUTPUT_FOLDER_ID = "1M4LFa1x91dEX4P0Peg8aCGxYVwLGelt9";
+  var OUTPUT_FOLDER_UNAVAILABLE_MESSAGE = "成果物の保存先フォルダにアクセスできません。フォルダの共有設定を確認し、学習者用GAS実行アカウントへ編集権限を付与してください。Drive直下には保存しません。";
+  var APPLICANT_NAME_MISSING_MESSAGE = "応募者氏名が登録されていないため、成果物を保存できません。面接官の発行内容を確認してください。";
   var CODE_NOT_FOUND_MESSAGE = "発行コードが正しくありません。半角英数字8文字（ハイフン不要）か、以前お渡ししたコードをもう一度確認してください。";
 
   var QUIZ_LIMITS = Object.freeze({
@@ -353,8 +358,56 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
           cached.idempotent = true;
           return cached;
         }
+        if (row.status === CODE_STATUS.USED && existingRequest && existingRequest.codeId === row.codeId && row.htmlFileId) {
+          var reusedDriveFileName = "";
+          try {
+            reusedDriveFileName = createDriveFileName(row.applicantId, quizData.gameTitle);
+          } catch (error) {
+            reusedDriveFileName = "";
+          }
+          var reused = {
+            ok: true,
+            codeId: row.codeId,
+            applicantId: row.applicantId,
+            workId: row.workId,
+            fileName: createDownloadFileName(quizData.gameTitle),
+            driveFileName: reusedDriveFileName,
+            issuedAt: row.redeemedAt || time.nowIso(),
+            deliveryStatus: row.deliveryStatus,
+            deliveryReference: row.deliveryReference,
+            idempotent: true
+          };
+          storage.updateRequest({
+            requestId: requestId,
+            codeId: row.codeId,
+            requestHash: requestHash,
+            status: REQUEST_STATUS.COMPLETED,
+            createdAt: existingRequest.createdAt,
+            completedAt: time.nowIso(),
+            resultJson: stringifyJson(reused),
+            errorCode: ""
+          });
+          return reused;
+        }
         try {
           validateCodeCanIssue(row);
+        } catch (error) {
+          recordRejectedAttempt(row.codeId, requestId, error && error.code ? error.code : ERROR_CODE.INVALID_REQUEST, {
+            codeHash: codeHash,
+            clientKey: request.clientKey || "",
+            email: email
+          });
+          throw error;
+        }
+
+        var mailFileName;
+        var driveFileName;
+        try {
+          mailFileName = createDownloadFileName(quizData.gameTitle);
+          driveFileName = createDriveFileName(row.applicantId, quizData.gameTitle);
+          if (typeof delivery.assertOutputFolder === "function") {
+            delivery.assertOutputFolder();
+          }
         } catch (error) {
           recordRejectedAttempt(row.codeId, requestId, error && error.code ? error.code : ERROR_CODE.INVALID_REQUEST, {
             codeHash: codeHash,
@@ -379,7 +432,7 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
 
         try {
           var workId = "work_" + random.generateId();
-          var fileName = createDownloadFileName(quizData.gameTitle);
+          var fileName = mailFileName;
           var html = createTrustedStandaloneQuizHtml({
             quizData: quizData,
             issuanceReference: {
@@ -397,7 +450,11 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
           row.workId = workId;
           row.updatedAt = issuedAt;
           storage.updateCode(row);
-          appendHistory(row.codeId, "work_generated", requestId, { workId: workId, fileName: fileName });
+          appendHistory(row.codeId, "work_generated", requestId, {
+            workId: workId,
+            fileName: fileName,
+            driveFileName: driveFileName
+          });
 
           var deliveryResult = attemptDelivery(function () {
             return delivery.deliver({
@@ -407,6 +464,9 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
               requestId: requestId,
               workId: workId,
               fileName: fileName,
+              mailFileName: mailFileName,
+              driveFileName: driveFileName,
+              existingFileId: row.htmlFileId || "",
               gameTitle: quizData.gameTitle,
               html: html
             });
@@ -429,6 +489,7 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
             applicantId: row.applicantId,
             workId: workId,
             fileName: fileName,
+            driveFileName: driveFileName,
             issuedAt: issuedAt,
             deliveryStatus: row.deliveryStatus,
             deliveryReference: row.deliveryReference,
@@ -538,6 +599,7 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
           requestId: requestId,
           workId: current.workId,
           fileId: current.htmlFileId,
+          mailFileName: findGeneratedMailFileName(current.codeId),
           previousReference: current.deliveryReference
         });
         current.deliveryStatus = result.ok ? DELIVERY_STATUS.SENT : DELIVERY_STATUS.FAILED;
@@ -659,6 +721,21 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     function hashAttemptValue(value) {
       var pepper = config.get("CODE_HASH_PEPPER") || "";
       return digest.sha256("JSQUIZ_V06_ATTEMPT:" + pepper + ":" + String(value || ""));
+    }
+
+    function findGeneratedMailFileName(codeId) {
+      var events = storage.listHistoryByCodeId(codeId) || [];
+      var i;
+      for (i = events.length - 1; i >= 0; i--) {
+        if (events[i].eventType !== "work_generated") {
+          continue;
+        }
+        var details = parseJson(events[i].details);
+        if (details && details.fileName) {
+          return String(details.fileName);
+        }
+      }
+      return "";
     }
   }
 
@@ -836,6 +913,9 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
   function createGasDriveMailDelivery(options) {
     var config = options && options.config ? options.config : createGasConfigAdapter();
     return {
+      assertOutputFolder: function () {
+        getOutputFolder(getDriveApp(), config);
+      },
       deliver: function (message) {
         return saveAndMail(message);
       },
@@ -845,15 +925,33 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     };
 
     function saveAndMail(message) {
-      var folderId = config.get("DELIVERY_FOLDER_ID");
-      var folder = folderId ? DriveApp.getFolderById(folderId) : DriveApp.getRootFolder();
-      var fileName = message.fileName || createDownloadFileName(message.gameTitle);
-      var blob = Utilities.newBlob(message.html, "text/html", fileName);
-      var file = folder.createFile(blob);
+      var drive = getDriveApp();
+      var existingFileId = message && (message.existingFileId || message.fileId) ? String(message.existingFileId || message.fileId) : "";
+      var file;
+      if (existingFileId) {
+        try {
+          file = drive.getFileById(existingFileId);
+        } catch (error) {
+          throw new IssuanceError(ERROR_CODE.OUTPUT_FOLDER_UNAVAILABLE, OUTPUT_FOLDER_UNAVAILABLE_MESSAGE);
+        }
+      } else {
+        var folder = getOutputFolder(drive, config);
+        var driveFileName = message.driveFileName || createDriveFileName(message.applicantId, message.gameTitle);
+        var blob = Utilities.newBlob(message.html, "text/html", driveFileName);
+        try {
+          file = folder.createFile(blob);
+        } catch (error) {
+          throw new IssuanceError(ERROR_CODE.OUTPUT_FOLDER_UNAVAILABLE, OUTPUT_FOLDER_UNAVAILABLE_MESSAGE);
+        }
+      }
+      if (!file || typeof file.getId !== "function") {
+        throw new IssuanceError(ERROR_CODE.OUTPUT_FOLDER_UNAVAILABLE, OUTPUT_FOLDER_UNAVAILABLE_MESSAGE);
+      }
       return mailExisting({
         email: message.email,
         workId: message.workId,
-        fileName: fileName,
+        mailFileName: resolveMailFileName(message, file),
+        gameTitle: message.gameTitle,
         fileId: file.getId(),
         requestId: message.requestId,
         html: message.html
@@ -869,11 +967,11 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
           errorMessage: "email is empty"
         };
       }
-      var file = DriveApp.getFileById(message.fileId);
+      var file = getDriveApp().getFileById(message.fileId);
       var attachment;
       try {
         attachment = file.getBlob();
-        attachment.setName(resolveDownloadFileName(message, file));
+        attachment.setName(resolveMailFileName(message, file));
       } catch (error) {
         return {
           ok: false,
@@ -1845,34 +1943,109 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     return out;
   }
 
+  function sanitizeFileNamePart(value, maxLength) {
+    var text = String(value == null ? "" : value);
+    text = text.replace(/[\u0000-\u001F\u007F]/g, "");
+    text = text.replace(/[\\/:*?"<>|]/g, "_");
+    text = text.replace(/^\.+/, "");
+    text = text.replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
+    text = text.replace(/[ .]+$/, "");
+    if (!text || text === "." || text === "..") {
+      return "";
+    }
+    if (text.length > maxLength) {
+      text = text.slice(0, maxLength).replace(/[ .]+$/, "");
+    }
+    return text;
+  }
+
   function createDownloadFileName(gameTitle) {
-    var title = String(gameTitle == null ? "" : gameTitle);
-    title = title.replace(/[\u0000-\u001F\u007F]/g, "");
-    title = title.replace(/[\\/:*?"<>|]/g, "_");
-    title = title.replace(/^\.+/, "");
-    title = title.replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
-    title = title.replace(/[ .]+$/, "");
-    if (!title || title === "." || title === "..") {
-      title = DOWNLOAD_FILE_FALLBACK;
-    }
-    if (title.length > DOWNLOAD_FILE_TITLE_MAX) {
-      title = title.slice(0, DOWNLOAD_FILE_TITLE_MAX).replace(/[ .]+$/, "");
-      if (!title) {
-        title = DOWNLOAD_FILE_FALLBACK;
-      }
-    }
+    var title = sanitizeFileNamePart(gameTitle, DOWNLOAD_FILE_TITLE_MAX) || DOWNLOAD_FILE_FALLBACK;
     return title + ".html";
   }
 
-  function resolveDownloadFileName(message, file) {
-    var fromMessage = message && message.fileName ? String(message.fileName) : "";
-    var fromFile = file && typeof file.getName === "function" ? String(file.getName() || "") : "";
-    var fromTitle = createDownloadFileName(message && message.gameTitle);
-    var name = fromMessage || fromFile || fromTitle || (DOWNLOAD_FILE_FALLBACK + ".html");
-    if (!/\.html$/i.test(name)) {
-      name = name + ".html";
+  function createDriveFileName(applicantName, gameTitle) {
+    var namePart = sanitizeFileNamePart(applicantName, DOWNLOAD_FILE_NAME_MAX);
+    if (!namePart) {
+      throw new IssuanceError(ERROR_CODE.INVALID_REQUEST, APPLICANT_NAME_MISSING_MESSAGE);
     }
-    return name;
+    var titlePart = sanitizeFileNamePart(gameTitle, DOWNLOAD_FILE_TITLE_MAX) || DOWNLOAD_FILE_FALLBACK;
+    return namePart + "_" + titlePart + ".html";
+  }
+
+  function ensureHtmlFileName(name) {
+    var fileName = String(name || "");
+    if (!fileName) {
+      return DOWNLOAD_FILE_FALLBACK + ".html";
+    }
+    if (!/\.html$/i.test(fileName)) {
+      return fileName + ".html";
+    }
+    return fileName;
+  }
+
+  function mailFileNameFromDriveName(driveName) {
+    var name = String(driveName || "");
+    var match = name.match(/^[^_]+_(.+\.html)$/i);
+    return match ? match[1] : "";
+  }
+
+  function resolveMailFileName(message, file) {
+    if (message && message.mailFileName) {
+      return ensureHtmlFileName(message.mailFileName);
+    }
+    if (message && message.gameTitle) {
+      return createDownloadFileName(message.gameTitle);
+    }
+    var fromDrive = file && typeof file.getName === "function" ? mailFileNameFromDriveName(file.getName()) : "";
+    if (fromDrive) {
+      return ensureHtmlFileName(fromDrive);
+    }
+    return DOWNLOAD_FILE_FALLBACK + ".html";
+  }
+
+  function resolveDownloadFileName(message, file) {
+    return resolveMailFileName(message, file);
+  }
+
+  function resolveOutputFolderId(config) {
+    var adapter = config || {};
+    var fromOutput = adapter.get ? String(adapter.get("OUTPUT_FOLDER_ID") || "").trim() : "";
+    if (fromOutput) {
+      return fromOutput;
+    }
+    var fromDelivery = adapter.get ? String(adapter.get("DELIVERY_FOLDER_ID") || "").trim() : "";
+    if (fromDelivery) {
+      return fromDelivery;
+    }
+    return DEFAULT_OUTPUT_FOLDER_ID;
+  }
+
+  function getDriveApp() {
+    if (typeof DriveApp === "undefined" || !DriveApp || typeof DriveApp.getFolderById !== "function") {
+      throw new IssuanceError(ERROR_CODE.OUTPUT_FOLDER_UNAVAILABLE, OUTPUT_FOLDER_UNAVAILABLE_MESSAGE);
+    }
+    return DriveApp;
+  }
+
+  function getOutputFolder(drive, config) {
+    var folderId = resolveOutputFolderId(config);
+    if (!folderId) {
+      throw new IssuanceError(ERROR_CODE.OUTPUT_FOLDER_UNAVAILABLE, OUTPUT_FOLDER_UNAVAILABLE_MESSAGE);
+    }
+    if (!drive || typeof drive.getFolderById !== "function") {
+      throw new IssuanceError(ERROR_CODE.OUTPUT_FOLDER_UNAVAILABLE, OUTPUT_FOLDER_UNAVAILABLE_MESSAGE);
+    }
+    var folder;
+    try {
+      folder = drive.getFolderById(folderId);
+    } catch (error) {
+      throw new IssuanceError(ERROR_CODE.OUTPUT_FOLDER_UNAVAILABLE, OUTPUT_FOLDER_UNAVAILABLE_MESSAGE);
+    }
+    if (!folder || typeof folder.createFile !== "function") {
+      throw new IssuanceError(ERROR_CODE.OUTPUT_FOLDER_UNAVAILABLE, OUTPUT_FOLDER_UNAVAILABLE_MESSAGE);
+    }
+    return folder;
   }
 
   function readPositiveInt(value, defaultValue) {
@@ -1990,6 +2163,9 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
         errorMessage: "delivery returned empty result"
       };
     } catch (error) {
+      if (error && error.code === ERROR_CODE.OUTPUT_FOLDER_UNAVAILABLE) {
+        throw error;
+      }
       return {
         ok: false,
         reference: "delivery:exception",
@@ -2019,9 +2195,14 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     PRIVILEGE_CODE_ALPHABET: PRIVILEGE_CODE_ALPHABET,
     PRIVILEGE_CODE_LENGTH: PRIVILEGE_CODE_LENGTH,
     CODE_NOT_FOUND_MESSAGE: CODE_NOT_FOUND_MESSAGE,
+    DEFAULT_OUTPUT_FOLDER_ID: DEFAULT_OUTPUT_FOLDER_ID,
+    OUTPUT_FOLDER_UNAVAILABLE_MESSAGE: OUTPUT_FOLDER_UNAVAILABLE_MESSAGE,
+    APPLICANT_NAME_MISSING_MESSAGE: APPLICANT_NAME_MISSING_MESSAGE,
     IssuanceError: IssuanceError,
     createPrivilegeCode: createPrivilegeCode,
     createDownloadFileName: createDownloadFileName,
+    createDriveFileName: createDriveFileName,
+    resolveOutputFolderId: resolveOutputFolderId,
     normalizeCode: normalizeCode,
     codeLookupCandidates: codeLookupCandidates,
     createBackend: createBackend,

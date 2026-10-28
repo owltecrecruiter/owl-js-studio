@@ -154,7 +154,8 @@ Set these in Apps Script project properties before production use:
 - `SPREADSHEET_ID`: target spreadsheet ID. If omitted, the active spreadsheet is used.
 - `ADMIN_API_TOKEN`: admin-only function token. Do not place this in GitHub Pages.
 - `CODE_HASH_PEPPER`: secret pepper added before SHA-256 hashing. Do not place this in GitHub Pages.
-- `DELIVERY_FOLDER_ID`: Drive folder used for generated HTML files. If omitted, root folder is used.
+- `OUTPUT_FOLDER_ID`: Drive folder for completed learner HTML. Recommended. Default if unset: `1M4LFa1x91dEX4P0Peg8aCGxYVwLGelt9`. If the folder is missing or the learner GAS account cannot write, issuance fails; files are never saved to Drive root.
+- `DELIVERY_FOLDER_ID`: legacy alias for `OUTPUT_FOLDER_ID`. Used only when `OUTPUT_FOLDER_ID` is unset.
 - `LEARNER_PAGE_ORIGIN`: exact GitHub Pages origin allowed to send iframe bridge messages, for example `https://example.github.io`.
 - `PUBLIC_LEARNER_DEPLOYMENT`: set to `true` before deploying the learner bridge with `Who has access: Anyone`. This disables top-level admin wrappers and editor test helpers in that deployment.
 - `ENABLE_GAS_EDITOR_TEST_HELPERS`: leave unset or `false` for production. Set to `true` only in an editor-only/private test context and never together with an `Anyone` learner deployment.
@@ -258,7 +259,7 @@ Delivery constraints:
 - Set strong `ADMIN_API_TOKEN` and `CODE_HASH_PEPPER` script properties.
 - Run `setupSpreadsheetSchema({ adminToken: "..." })` once before enabling public learner mode, or use a separate private admin project/deployment.
 - Decide Drive sharing policy. Do not default to unrestricted public links.
-- Configure `DELIVERY_FOLDER_ID` and mail sender policy.
+- Set `OUTPUT_FOLDER_ID` on the learner GAS project (or accept the default folder ID). Share that folder with the learner GAS execution account as an editor. Do not fall back to Drive root.
 - Run `setupSpreadsheetSchema({ adminToken: "..." })` before setting public learner mode, or run setup from a separate private admin project/deployment.
 - Set `ENABLE_GAS_EDITOR_TEST_HELPERS=false` or remove it.
 - Set `PUBLIC_LEARNER_DEPLOYMENT=true` for the public learner Web App.

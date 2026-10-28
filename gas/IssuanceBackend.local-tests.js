@@ -18,6 +18,7 @@ const {
   createLearnerBridgeHtml,
   createTrustedStandaloneQuizHtml,
   createGasDriveMailDelivery,
+  DEFAULT_OUTPUT_FOLDER_ID,
   COMPLETED_QUIZ_MAIL_SUBJECT,
   buildCompletedQuizMailBody,
   extractBridgeSession,
@@ -205,6 +206,7 @@ test("same requestId retry returns idempotent result", function () {
   assert.strictEqual(second.idempotent, true);
   assert.strictEqual(second.workId, first.workId);
   assert.strictEqual(second.deliveryReference, first.deliveryReference);
+  assert.strictEqual(fixture.delivery.sent.length, 1);
 });
 
 test("same requestId with different work data is rejected", function () {
@@ -528,81 +530,82 @@ test("completed quiz mail copy describes HTML attachment", function () {
   assert.ok(body.indexOf("株式会社アウルテクノロジー") !== -1);
 });
 
-test("Drive mail delivery attaches HTML after saving to Drive", function () {
-  const previous = {
-    DriveApp: global.DriveApp,
-    Utilities: global.Utilities,
-    MailApp: global.MailApp,
-    PropertiesService: global.PropertiesService
-  };
-  const sent = [];
-  const files = {};
-  global.PropertiesService = {
-    getScriptProperties: function () {
-      return {
-        getProperty: function () {
-          return "";
-        }
-      };
-    }
-  };
-  global.Utilities = {
-    newBlob: function (html, type, name) {
-      return { html: html, type: type, name: name };
-    }
-  };
-  global.DriveApp = {
-    getRootFolder: function () {
-      return {
-        createFile: function (blob) {
-          const id = "file-1";
-          files[id] = {
-            getId: function () { return id; },
-            getName: function () { return blob.name; },
-            getBlob: function () {
-              return {
-                name: blob.name,
-                getName: function () { return this.name; },
-                setName: function (next) { this.name = next; return this; },
-                getBytes: function () { return Buffer.from(String(blob.html), "utf8"); }
-              };
-            }
-          };
-          return files[id];
-        }
-      };
-    },
-    getFileById: function (id) {
-      return files[id];
-    }
-  };
-  global.MailApp = {
-    sendEmail: function (options) {
-      sent.push(options);
-    }
-  };
+test("Drive mail delivery saves to the configured folder with applicant-title name", function () {
+  const harness = createDriveMailHarness();
   try {
     const delivery = createGasDriveMailDelivery();
     const result = delivery.deliver({
       email: "learner@example.com",
       workId: "work_local_html",
+      applicantId: "山田太郎",
       fileName: "はじめての3択クイズ.html",
+      mailFileName: "はじめての3択クイズ.html",
+      driveFileName: "山田太郎_はじめての3択クイズ.html",
       gameTitle: "はじめての3択クイズ",
       requestId: "req-mail-attach",
       html: "<!DOCTYPE html><html lang=\"ja\"><body>quiz</body></html>"
     });
     assert.strictEqual(result.ok, true);
-    assert.strictEqual(sent.length, 1);
-    assert.strictEqual(sent[0].to, "learner@example.com");
-    assert.strictEqual(sent[0].subject, COMPLETED_QUIZ_MAIL_SUBJECT);
-    assert.ok(sent[0].body.indexOf("はじめての3択クイズ.html") !== -1);
-    assert.strictEqual(sent[0].attachments.length, 1);
-    assert.strictEqual(sent[0].attachments[0].getName(), "はじめての3択クイズ.html");
+    assert.strictEqual(harness.created.length, 1);
+    assert.strictEqual(harness.created[0].folderId, DEFAULT_OUTPUT_FOLDER_ID);
+    assert.strictEqual(harness.created[0].name, "山田太郎_はじめての3択クイズ.html");
+    assert.strictEqual(harness.rootCalls, 0);
+    assert.strictEqual(harness.sent.length, 1);
+    assert.strictEqual(harness.sent[0].to, "learner@example.com");
+    assert.strictEqual(harness.sent[0].subject, COMPLETED_QUIZ_MAIL_SUBJECT);
+    assert.ok(harness.sent[0].body.indexOf("はじめての3択クイズ.html") !== -1);
+    assert.ok(harness.sent[0].body.indexOf("山田太郎_") === -1);
+    assert.strictEqual(harness.sent[0].attachments.length, 1);
+    assert.strictEqual(harness.sent[0].attachments[0].getName(), "はじめての3択クイズ.html");
   } finally {
-    global.DriveApp = previous.DriveApp;
-    global.Utilities = previous.Utilities;
-    global.MailApp = previous.MailApp;
-    global.PropertiesService = previous.PropertiesService;
+    harness.restore();
+  }
+});
+
+test("Drive mail delivery uses OUTPUT_FOLDER_ID and never falls back to Drive root", function () {
+  const harness = createDriveMailHarness({
+    properties: {
+      OUTPUT_FOLDER_ID: "custom-output-folder"
+    }
+  });
+  try {
+    const delivery = createGasDriveMailDelivery();
+    delivery.deliver({
+      email: "learner@example.com",
+      workId: "work_custom_folder",
+      applicantId: "佐藤花子",
+      gameTitle: "動物クイズ",
+      requestId: "req-custom-folder",
+      html: "<!DOCTYPE html><html lang=\"ja\"><body>quiz</body></html>"
+    });
+    assert.strictEqual(harness.created[0].folderId, "custom-output-folder");
+    assert.strictEqual(harness.created[0].name, "佐藤花子_動物クイズ.html");
+    assert.strictEqual(harness.sent[0].attachments[0].getName(), "動物クイズ.html");
+    assert.strictEqual(harness.rootCalls, 0);
+  } finally {
+    harness.restore();
+  }
+});
+
+test("Drive save fails clearly when the output folder is unavailable", function () {
+  const harness = createDriveMailHarness({ folderMissing: true });
+  try {
+    const delivery = createGasDriveMailDelivery();
+    assertRejectsCode(function () {
+      delivery.deliver({
+        email: "learner@example.com",
+        workId: "work_missing_folder",
+        applicantId: "山田太郎",
+        gameTitle: "はじめての3択クイズ",
+        requestId: "req-missing-folder",
+        html: "<!DOCTYPE html><html lang=\"ja\"><body>quiz</body></html>"
+      });
+    }, ERROR_CODE.OUTPUT_FOLDER_UNAVAILABLE);
+    assert.strictEqual(harness.created.length, 0);
+    assert.strictEqual(harness.sent.length, 0);
+    assert.strictEqual(harness.rootCalls, 0);
+  } finally {
+    harness.restore();
   }
 });
 
@@ -1013,6 +1016,8 @@ test("new codes accept lowercase and surrounding spaces", function () {
   assert.strictEqual(issued.ok, true);
   assert.strictEqual(issued.fileName, "はじめての3択クイズ.html");
   assert.strictEqual(fixture.delivery.sent[0].fileName, "はじめての3択クイズ.html");
+  assert.strictEqual(fixture.delivery.sent[0].mailFileName, "はじめての3択クイズ.html");
+  assert.strictEqual(fixture.delivery.sent[0].driveFileName, "applicant-7kmp4r8t_はじめての3択クイズ.html");
   assert.strictEqual(issued.workId.indexOf("work_"), 0);
 });
 
@@ -1068,6 +1073,169 @@ test("download file names use the game title safely", function () {
   const longName = backendApi.createDownloadFileName(longTitle);
   assert.ok(longName.length <= 85);
   assert.ok(longName.indexOf(".html") === longName.length - 5);
+});
+
+test("output folder id prefers OUTPUT_FOLDER_ID then default", function () {
+  assert.strictEqual(backendApi.resolveOutputFolderId({ get: function () { return ""; } }), DEFAULT_OUTPUT_FOLDER_ID);
+  assert.strictEqual(backendApi.resolveOutputFolderId({
+    get: function (key) {
+      return key === "OUTPUT_FOLDER_ID" ? "output-folder" : "legacy-folder";
+    }
+  }), "output-folder");
+  assert.strictEqual(backendApi.resolveOutputFolderId({
+    get: function (key) {
+      return key === "DELIVERY_FOLDER_ID" ? "legacy-folder" : "";
+    }
+  }), "legacy-folder");
+});
+
+test("Drive file names prefix the registered applicant name", function () {
+  assert.strictEqual(
+    backendApi.createDriveFileName("山田太郎", "はじめての3択クイズ"),
+    "山田太郎_はじめての3択クイズ.html"
+  );
+  assert.strictEqual(
+    backendApi.createDriveFileName("山田/太郎", "a/b:c*d?e\"f<g>h|i"),
+    "山田_太郎_a_b_c_d_e_f_g_h_i.html"
+  );
+  assertRejectsCode(function () {
+    backendApi.createDriveFileName("", "はじめての3択クイズ");
+  }, ERROR_CODE.INVALID_REQUEST);
+  assertRejectsCode(function () {
+    backendApi.createDriveFileName("...", "はじめての3択クイズ");
+  }, ERROR_CODE.INVALID_REQUEST);
+});
+
+test("issueWork Drive name uses applicant name while mail name stays title-only", function () {
+  const fixture = createFixture();
+  fixture.backend.generateCode({
+    adminToken: ADMIN_TOKEN,
+    applicantId: "山田太郎",
+    email: "learner@example.com",
+    attendanceConfirmed: true,
+    code: "NAMEFILE1"
+  });
+  const titledQuiz = clone(validQuizData);
+  titledQuiz.gameTitle = "動物クイズ";
+  const issued = fixture.backend.issueWork({
+    code: "NAMEFILE1",
+    requestId: "req-name-file",
+    email: "learner@example.com",
+    quizData: titledQuiz
+  });
+  assert.strictEqual(issued.fileName, "動物クイズ.html");
+  assert.strictEqual(issued.driveFileName, "山田太郎_動物クイズ.html");
+  assert.strictEqual(fixture.delivery.sent[0].mailFileName, "動物クイズ.html");
+  assert.strictEqual(fixture.delivery.sent[0].driveFileName, "山田太郎_動物クイズ.html");
+  assert.strictEqual(fixture.delivery.sent[0].fileName, "動物クイズ.html");
+});
+
+test("two applicants can save the same title without colliding", function () {
+  const fixture = createFixture();
+  fixture.backend.generateCode({
+    adminToken: ADMIN_TOKEN,
+    applicantId: "山田太郎",
+    email: "a@example.com",
+    attendanceConfirmed: true,
+    code: "SAMETITL1"
+  });
+  fixture.backend.generateCode({
+    adminToken: ADMIN_TOKEN,
+    applicantId: "佐藤花子",
+    email: "b@example.com",
+    attendanceConfirmed: true,
+    code: "SAMETITL2"
+  });
+  const first = fixture.backend.issueWork({
+    code: "SAMETITL1",
+    requestId: "req-same-title-1",
+    email: "a@example.com",
+    quizData: validQuizData
+  });
+  const second = fixture.backend.issueWork({
+    code: "SAMETITL2",
+    requestId: "req-same-title-2",
+    email: "b@example.com",
+    quizData: validQuizData
+  });
+  assert.strictEqual(first.driveFileName, "山田太郎_はじめての3択クイズ.html");
+  assert.strictEqual(second.driveFileName, "佐藤花子_はじめての3択クイズ.html");
+  assert.strictEqual(first.fileName, second.fileName);
+  assert.notStrictEqual(first.workId, second.workId);
+  assert.strictEqual(fixture.delivery.sent.length, 2);
+});
+
+test("missing applicant name fails before the code is consumed", function () {
+  const fixture = createFixture();
+  generateCode(fixture, "NONAME001", true);
+  fixture.storage.codes[0].applicantId = "";
+  assertRejectsCode(function () {
+    fixture.backend.issueWork({
+      code: "NONAME001",
+      requestId: "req-no-name",
+      email: "learner@example.com",
+      quizData: validQuizData
+    });
+  }, ERROR_CODE.INVALID_REQUEST);
+  assert.strictEqual(fixture.storage.codes[0].status, CODE_STATUS.VALID);
+  assert.strictEqual(fixture.delivery.sent.length, 0);
+});
+
+test("output folder errors fail before the code is consumed and do not save", function () {
+  const fixture = createFixture({
+    delivery: {
+      sent: [],
+      assertOutputFolder: function () {
+        throw new backendApi.IssuanceError(ERROR_CODE.OUTPUT_FOLDER_UNAVAILABLE, "folder missing");
+      },
+      deliver: function () {
+        throw new Error("deliver should not run when the folder is unavailable");
+      },
+      resend: function () {
+        return { ok: false };
+      }
+    }
+  });
+  generateCode(fixture, "NOFOLDER1", true);
+  assertRejectsCode(function () {
+    fixture.backend.issueWork({
+      code: "NOFOLDER1",
+      requestId: "req-no-folder",
+      email: "learner@example.com",
+      quizData: validQuizData
+    });
+  }, ERROR_CODE.OUTPUT_FOLDER_UNAVAILABLE);
+  assert.strictEqual(fixture.storage.codes[0].status, CODE_STATUS.VALID);
+  assert.strictEqual(fixture.storage.codes[0].workId, "");
+  assert.strictEqual(fixture.delivery.sent.length, 0);
+});
+
+test("retry after a saved Drive file does not create a duplicate file", function () {
+  const fixture = createFixture();
+  fixture.backend.generateCode({
+    adminToken: ADMIN_TOKEN,
+    applicantId: "山田太郎",
+    email: "learner@example.com",
+    attendanceConfirmed: true,
+    code: "RETRYFIL1"
+  });
+  const first = fixture.backend.issueWork({
+    code: "RETRYFIL1",
+    requestId: "req-retry-file",
+    email: "learner@example.com",
+    quizData: validQuizData
+  });
+  fixture.storage.requests[0].status = "pending";
+  fixture.storage.requests[0].resultJson = "";
+  const second = fixture.backend.issueWork({
+    code: "RETRYFIL1",
+    requestId: "req-retry-file",
+    email: "learner@example.com",
+    quizData: validQuizData
+  });
+  assert.strictEqual(second.idempotent, true);
+  assert.strictEqual(second.workId, first.workId);
+  assert.strictEqual(fixture.delivery.sent.length, 1);
 });
 
 test("existing v0.5 issuance module remains loadable", function () {
@@ -1424,6 +1592,86 @@ function withMockHtmlService(fn) {
   } finally {
     global.HtmlService = previous;
   }
+}
+
+function createDriveMailHarness(options) {
+  const config = options || {};
+  const previous = {
+    DriveApp: global.DriveApp,
+    Utilities: global.Utilities,
+    MailApp: global.MailApp,
+    PropertiesService: global.PropertiesService
+  };
+  const sent = [];
+  const created = [];
+  const files = {};
+  const properties = config.properties || {};
+  let rootCalls = 0;
+  global.PropertiesService = {
+    getScriptProperties: function () {
+      return {
+        getProperty: function (key) {
+          return properties[key] || "";
+        }
+      };
+    }
+  };
+  global.Utilities = {
+    newBlob: function (html, type, name) {
+      return { html: html, type: type, name: name };
+    }
+  };
+  global.DriveApp = {
+    getRootFolder: function () {
+      rootCalls += 1;
+      throw new Error("Drive root must not be used for completed HTML");
+    },
+    getFolderById: function (folderId) {
+      if (config.folderMissing) {
+        throw new Error("folder not found");
+      }
+      return {
+        createFile: function (blob) {
+          const id = "file-" + String(created.length + 1);
+          created.push({ folderId: folderId, name: blob.name, id: id });
+          files[id] = {
+            getId: function () { return id; },
+            getName: function () { return blob.name; },
+            getBlob: function () {
+              return {
+                name: blob.name,
+                getName: function () { return this.name; },
+                setName: function (next) { this.name = next; return this; },
+                getBytes: function () { return Buffer.from(String(blob.html), "utf8"); }
+              };
+            }
+          };
+          return files[id];
+        }
+      };
+    },
+    getFileById: function (id) {
+      return files[id];
+    }
+  };
+  global.MailApp = {
+    sendEmail: function (mailOptions) {
+      sent.push(mailOptions);
+    }
+  };
+  return {
+    sent: sent,
+    created: created,
+    get rootCalls() {
+      return rootCalls;
+    },
+    restore: function () {
+      global.DriveApp = previous.DriveApp;
+      global.Utilities = previous.Utilities;
+      global.MailApp = previous.MailApp;
+      global.PropertiesService = previous.PropertiesService;
+    }
+  };
 }
 
 function withMockContentService(fn) {

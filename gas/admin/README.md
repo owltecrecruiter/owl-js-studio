@@ -35,7 +35,7 @@ Apps Script ではいずれも `.gs` として保存して構いません。
 | `INTERVIEWER_ADMIN_PASSWORD` | 必須 | 面接官が画面に入力するパスワード |
 | `ADMIN_AUTH_ATTEMPT_LIMIT` | 任意 | 認証失敗の上限。未設定時は 5 |
 | `ADMIN_AUTH_ATTEMPT_WINDOW_SECONDS` | 任意 | 上記の時間窓（秒）。未設定時は 600 |
-| `DELIVERY_FOLDER_ID` | 任意 | 学習者発行時の Drive フォルダ。この画面ではメール送信しません |
+| `OUTPUT_FOLDER_ID` | 学習者側 | 成果物HTMLの保存先。面接官画面では使わない。未設定時は指定フォルダを既定値として使用 |
 
 学習者プロジェクト側はこれまでどおり `PUBLIC_LEARNER_DEPLOYMENT=true` のままにしてください。
 
