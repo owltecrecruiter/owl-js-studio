@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.19 / interviewer issuance is a separate GAS admin app
+ * OWL JS Studio v0.9.20 / interviewer issuance is a separate GAS admin app
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -179,10 +179,10 @@
     {
       number: 5,
       title: "STEP 5：正解を設定しよう",
-      learn: "正解は `selectedIndex1 === 番号` のような番号で決まります。選択肢は STEP 4 で変えてある前提です。",
-      description: "正解は `selectedIndex1 === 番号` のような番号で決まります。選択肢は STEP 4 で変えてある前提です。",
+      learn: "正解は `selectedIndex1 === 番号` のような番号で決まります。3問のうち、好きな1問だけでOKです。選択肢は STEP 4 で変えてある前提です。",
+      description: "正解は `selectedIndex1 === 番号` のような番号で決まります。3問のうち、好きな1問だけでOKです。選択肢は STEP 4 で変えてある前提です。",
       tasks: [
-        "STEP 4で作った問題のうち、どれか1問の正解番号を変える",
+        "3問のうち、好きな1問だけでOK。その問題の正解番号を変える",
         "「実行」を押す",
         "プレビューで、変えた問題の正しい選択肢を選ぶ",
         "「正解！」が表示されたらクリア"
@@ -204,8 +204,9 @@
         correctIndexTo: 1,
         indexNote: "コードの 0・1・2 は、上から1番目・2番目・3番目です。選択肢は変えず、正解番号だけを合わせます。"
       },
-      goal: "正解番号を変更し、実行後、新しい正解を選んで『正解！』が表示されたらクリア",
+      goal: "3問のうち好きな1問の正解番号を変更し、実行後、その問題の新しい正解を選んで『正解！』が表示されたらクリア",
       hints: [
+        "3問すべての正解番号を変える必要はありません。好きな1問だけでOKです。",
         "第1問なら `selectedIndex1 === 番号` を、新しい正解の位置に合わせます。",
         "正解番号は 0が1番上、1が2番目、2が3番目です。1,2,3 では書けません。",
         "「実行」と「正解！」の確認は別の操作です。どちらも必要です。"
@@ -1693,6 +1694,40 @@
     return true;
   }
 
+  function rememberLearningComplete(previouslyComplete, parsedData, parseError, initialWork, evidence) {
+    if (previouslyComplete === true) {
+      return true;
+    }
+    return areAllStepsComplete(parsedData, parseError, initialWork, evidence) === true;
+  }
+
+  function evaluateCourseClearGate(input) {
+    var options = input || {};
+    var learningComplete = options.learningComplete === true;
+    var codeValid = options.parseError == null;
+    var runCurrent = options.editorMatchesLastRun === true && options.lastRunWork != null;
+    var clearEnabled = learningComplete === true && codeValid === true;
+    var canOpenIssuance = clearEnabled === true && runCurrent === true;
+    var message;
+    if (learningComplete !== true) {
+      message = "STEP 1〜5をすべて達成すると有効になります";
+    } else if (codeValid !== true) {
+      message = "コードのエラーを直してください。直すとCLEARから進めます。";
+    } else if (runCurrent !== true) {
+      message = "最新のコードを「実行」してから発行してください。";
+    } else {
+      message = "発行コードを入力して完成したクイズを受け取る";
+    }
+    return {
+      learningComplete: learningComplete,
+      codeValid: codeValid,
+      runCurrent: runCurrent,
+      clearEnabled: clearEnabled,
+      canOpenIssuance: canOpenIssuance,
+      message: message
+    };
+  }
+
   function formatIssuanceResultCopy(result) {
     var status = result && result.deliveryStatus ? String(result.deliveryStatus) : "";
     var fileName = result && result.fileName ? String(result.fileName) : "";
@@ -2345,6 +2380,8 @@
     hasCurrentRunEvidence: hasCurrentRunEvidence,
     evaluateStepProgress: evaluateStepProgress,
     areAllStepsComplete: areAllStepsComplete,
+    rememberLearningComplete: rememberLearningComplete,
+    evaluateCourseClearGate: evaluateCourseClearGate,
     formatIssuanceResultCopy: formatIssuanceResultCopy,
     formatIssuanceErrorCopy: formatIssuanceErrorCopy,
     createDownloadFileName: createDownloadFileName,

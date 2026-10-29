@@ -20,6 +20,8 @@ const validateWorkData = studioCore.validateWorkData;
 const createStandaloneQuizHtml = studioCore.createStandaloneQuizHtml;
 const evaluateStepProgress = studioCore.evaluateStepProgress;
 const areAllStepsComplete = studioCore.areAllStepsComplete;
+const rememberLearningComplete = studioCore.rememberLearningComplete;
+const evaluateCourseClearGate = studioCore.evaluateCourseClearGate;
 const formatIssuanceResultCopy = studioCore.formatIssuanceResultCopy;
 const formatIssuanceErrorCopy = studioCore.formatIssuanceErrorCopy;
 const getStepFocusLines = studioCore.getStepFocusLines;
@@ -160,6 +162,7 @@ let resetDialogLastFocus = null;
 let issuanceLastFocus = null;
 let issuanceInFlight = false;
 let announcedAllStepsComplete = false;
+let learningComplete = false;
 const announcedStepClears = {
   1: false,
   2: false,
@@ -543,13 +546,11 @@ function announceNewlyCompletedSteps() {
       announcedStepClears[stepNumber] = false;
     }
   }
-  if (areAllStepsComplete(parsed, parseError, initialQuizSnapshot, getStepEvidence()) === true) {
-    if (announcedAllStepsComplete !== true) {
-      announcedAllStepsComplete = true;
-      appendConsole("success", "全STEPクリア！完成したクイズを受け取りましょう。");
-    }
-  } else {
-    announcedAllStepsComplete = false;
+  const wasComplete = learningComplete === true;
+  updateLearningComplete(parsed, parseError);
+  if (learningComplete === true && wasComplete !== true) {
+    announcedAllStepsComplete = true;
+    appendConsole("success", "全STEPクリア！完成したクイズを受け取りましょう。");
   }
 }
 
@@ -571,6 +572,7 @@ function updateLearningSupport() {
     latestParsedSupportData = null;
   }
 
+  updateLearningComplete(parsed, parseError);
   renderStepGuide(parsed, parseError);
 }
 
@@ -700,6 +702,27 @@ function getStepEvidence() {
   };
 }
 
+function updateLearningComplete(parsed, parseError) {
+  learningComplete = rememberLearningComplete(
+    learningComplete,
+    parsed,
+    parseError,
+    initialQuizSnapshot,
+    getStepEvidence()
+  );
+  return learningComplete;
+}
+
+function getCurrentCourseClearGate(parsed, parseError) {
+  const evidence = getStepEvidence();
+  return evaluateCourseClearGate({
+    learningComplete: learningComplete,
+    parseError: parseError,
+    editorMatchesLastRun: evidence.editorMatchesLastRun,
+    lastRunWork: evidence.lastRunWork
+  });
+}
+
 function renderStepGuide(parsed, parseError) {
   renderStepButtons(parsed, parseError);
 
@@ -820,12 +843,12 @@ function createChoiceCompareColumn(heading, choices, isAfter) {
 }
 
 function renderCompletionGuide(parsed, parseError) {
-  const allDone = areAllStepsComplete(parsed, parseError, initialQuizSnapshot, getStepEvidence()) === true;
-  if (allDone) {
+  const gate = getCurrentCourseClearGate(parsed, parseError);
+  if (gate.learningComplete === true) {
     completionGuide.hidden = false;
     completionGuide.removeAttribute("hidden");
     completionGuide.classList.remove("hidden");
-    receiveQuizButton.disabled = false;
+    receiveQuizButton.disabled = gate.clearEnabled !== true;
   } else {
     completionGuide.hidden = true;
     completionGuide.setAttribute("hidden", "");
@@ -865,16 +888,13 @@ function renderStepButtons(parsed, parseError) {
   clearButton.type = "button";
   clearButton.className = "step-clear-button";
   clearButton.textContent = "CLEAR";
-  const allDone = areAllStepsComplete(parsed, parseError, initialQuizSnapshot, getStepEvidence()) === true;
-  clearButton.disabled = !allDone;
-  if (allDone) {
+  const gate = getCurrentCourseClearGate(parsed, parseError);
+  clearButton.disabled = gate.clearEnabled !== true;
+  if (gate.learningComplete === true && gate.codeValid === true) {
     clearButton.classList.add("ready");
   }
-  clearButton.title = allDone ? "発行コードを入力して完成したクイズを受け取る" : "STEP 1〜5をすべて達成すると有効になります";
+  clearButton.title = gate.message;
   clearButton.addEventListener("click", function () {
-    if (clearButton.disabled) {
-      return;
-    }
     openIssuanceDialog();
   });
   stepButtons.appendChild(clearButton);
@@ -1015,22 +1035,25 @@ function generateStandaloneQuizHtmlForCurrentEditor() {
 }
 
 function getLastValidQuizData() {
-  if (lastValidQuizData === null) {
+  if (lastRunWork === null || lastRunSourceCode === null || lastRunSourceCode !== codeEditor.value) {
     return null;
   }
   try {
-    return validateWorkData(cloneWorkData(lastValidQuizData));
+    return validateWorkData(cloneWorkData(lastRunWork));
   } catch (error) {
     return null;
   }
 }
 
 function getVerifiedStandaloneQuizData() {
-  if (lastValidSourceCode === null || codeEditor.value !== lastValidSourceCode) {
-    throw createCodeError("現在のコードはまだ検証されていません。エラーを直してから生成してください。");
+  if (lastRunSourceCode === null || codeEditor.value !== lastRunSourceCode) {
+    throw createCodeError("現在のコードはまだ実行されていません。実行してから生成してください。");
   }
-
-  return validateWorkData(getLastValidQuizData());
+  const runData = getLastValidQuizData();
+  if (!runData) {
+    throw createCodeError("完成したクイズデータがありません。エラーを直してから生成してください。");
+  }
+  return runData;
 }
 
 // ==================================================
@@ -1773,7 +1796,21 @@ function setIssuanceFormStatus(message, isError) {
 }
 
 function openIssuanceDialog() {
-  if (receiveQuizButton.disabled === true) {
+  let parsed = null;
+  let parseError = null;
+  try {
+    parsed = parseLearnerCode(codeEditor.value);
+  } catch (error) {
+    parseError = error;
+  }
+  updateLearningComplete(parsed, parseError);
+  const gate = getCurrentCourseClearGate(parsed, parseError);
+  if (gate.canOpenIssuance !== true) {
+    if (gate.learningComplete === true && gate.codeValid !== true) {
+      appendConsole("error", gate.message);
+    } else if (gate.learningComplete === true && gate.runCurrent !== true) {
+      appendConsole("notice", gate.message);
+    }
     return;
   }
   if (isIssuanceDialogOpen()) {
@@ -1829,7 +1866,7 @@ function submitIssuanceRequest() {
     return;
   }
   if (!getLastValidQuizData()) {
-    setIssuanceFormStatus("完成したクイズデータがありません。エラーを直してから発行してください。", true);
+    setIssuanceFormStatus("最新のコードを「実行」してから発行してください。", true);
     return;
   }
   if (getGasBridgeUrl() === "" && typeof window.createOwlJsStudioIssueClient !== "function") {
@@ -2361,7 +2398,22 @@ window.areAllLearningStepsComplete = function () {
   } catch (error) {
     parseError = error;
   }
-  return areAllStepsComplete(parsed, parseError, initialQuizSnapshot, getStepEvidence());
+  updateLearningComplete(parsed, parseError);
+  return learningComplete === true;
+};
+window.isLearningComplete = function () {
+  return learningComplete === true;
+};
+window.getCourseClearGate = function () {
+  let parsed = null;
+  let parseError = null;
+  try {
+    parsed = parseLearnerCode(codeEditor.value);
+  } catch (error) {
+    parseError = error;
+  }
+  updateLearningComplete(parsed, parseError);
+  return getCurrentCourseClearGate(parsed, parseError);
 };
 window.openIssuanceDialog = openIssuanceDialog;
 window.closeIssuanceDialog = closeIssuanceDialog;

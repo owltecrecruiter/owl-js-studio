@@ -200,7 +200,7 @@
     <span id="status-cursor">Ln 1, Col 1</span>
     <span>JavaScript</span>
     <span>UTF-8</span>
-    <span>v0.9.19</span>
+    <span>v0.9.20</span>
   </footer>
 
   <div id="reset-dialog" class="modal-overlay hidden" hidden>
@@ -218,10 +218,11 @@
   </div>
 
   <div id="issuance-dialog" class="modal-overlay hidden" hidden>
-    <div class="modal-card issuance-card" role="dialog" aria-modal="true" aria-labelledby="issuance-dialog-title" aria-describedby="issuance-dialog-copy">
+    <div class="modal-card issuance-card" role="dialog" aria-modal="true" aria-labelledby="issuance-dialog-title" aria-describedby="issuance-dialog-copy issuance-dialog-note">
       <h2 id="issuance-dialog-title">完成したクイズを受け取る</h2>
       <div id="issuance-form-view">
-        <p id="issuance-dialog-copy">授業で受け取った特典コードを入力してください。特典コードは1回だけ使えます。</p>
+        <p id="issuance-dialog-copy">受け取った特典コードを入力してください。<br>今の作ったクイズゲームを受け取れます。</p>
+        <p id="issuance-dialog-note" class="issuance-copy-note">※注意※特典コードは1回だけ使えます。</p>
         <label class="issuance-label" for="issuance-code-input">特典コード</label>
         <input id="issuance-code-input" class="issuance-code-input" type="text" autocomplete="off" spellcheck="false" maxlength="120" autocapitalize="characters" placeholder="特典コードを入力">
         <p class="issuance-hint">半角英数字8文字・ハイフン不要</p>

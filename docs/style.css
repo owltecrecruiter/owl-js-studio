@@ -1365,6 +1365,19 @@ body:not(.guide-open) #activity-guide {
   width: min(460px, 100%);
 }
 
+#issuance-dialog-copy {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.issuance-copy-note {
+  display: block;
+  margin: 10px 0 0;
+  color: #e2c08d;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .issuance-label {
   display: block;
   margin: 10px 0 6px;
