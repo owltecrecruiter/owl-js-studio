@@ -38,7 +38,7 @@ const findLearnerRgbLiteralByName = studioCore.findLearnerRgbLiteralByName;
 const findLearnerRgbLiteralAtOffset = studioCore.findLearnerRgbLiteralAtOffset;
 const createCodeHistory = studioCore.createCodeHistory;
 const createPreviewHistory = studioCore.createPreviewHistory;
-const questionHasPairedStep5Edits = studioCore.questionHasPairedStep5Edits;
+const questionHasChangedCorrectIndex = studioCore.questionHasChangedCorrectIndex;
 
 // ==================================================
 // 画面要素
@@ -757,16 +757,26 @@ function createChoiceCompare(example) {
 
   const question = document.createElement("p");
   question.className = "choice-compare-question";
-  question.textContent = "例（初期の第1問）：" + example.question;
+  const caption = example.caption || "例";
+  if (example.questionFrom && example.questionTo) {
+    question.textContent = caption + "：" + example.questionFrom + " → " + example.questionTo;
+  } else {
+    question.textContent = caption + "：" + example.question;
+  }
   wrap.appendChild(question);
 
   wrap.appendChild(createChoiceCompareColumn("変更前", example.before, false));
   wrap.appendChild(createChoiceCompareColumn("変更後", example.after, true));
 
-  const indexLine = document.createElement("p");
-  indexLine.className = "choice-compare-index";
-  indexLine.textContent = "正解番号：" + example.correctIndexFrom + " → " + example.correctIndexTo;
-  wrap.appendChild(indexLine);
+  const showCorrectIndex = example.showCorrectIndex !== false &&
+    example.correctIndexFrom != null &&
+    example.correctIndexTo != null;
+  if (showCorrectIndex) {
+    const indexLine = document.createElement("p");
+    indexLine.className = "choice-compare-index";
+    indexLine.textContent = "正解番号：" + example.correctIndexFrom + " → " + example.correctIndexTo;
+    wrap.appendChild(indexLine);
+  }
 
   if (example.indexNote) {
     const note = document.createElement("p");
@@ -1593,7 +1603,7 @@ function maybeConfirmNewCorrect() {
   if (typeof currentQuestionIndex !== "number") {
     return;
   }
-  if (questionHasPairedStep5Edits(lastRunWork, initialQuizSnapshot, currentQuestionIndex) !== true) {
+  if (questionHasChangedCorrectIndex(lastRunWork, initialQuizSnapshot, currentQuestionIndex) !== true) {
     return;
   }
   const selected = previewHistory.getAnswer(currentQuestionIndex);

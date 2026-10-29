@@ -1,5 +1,5 @@
 /*
- * OWL JS Studio v0.9.18 / interviewer issuance is a separate GAS admin app
+ * OWL JS Studio v0.9.19 / interviewer issuance is a separate GAS admin app
  * Limited learner parser, work-data validation, and standalone HTML generator.
  * No eval / new Function. Learners may only edit allowlisted setting values.
  */
@@ -143,37 +143,57 @@
     },
     {
       number: 4,
-      title: "STEP 4：問題文を変える",
-      learn: "3問の問題文は `question1` `question2` `question3` です。",
-      description: "3問の問題文は `question1` `question2` `question3` です。",
+      title: "STEP 4：自分のクイズを作ろう",
+      learn: "3問の問題文は `question1`〜`question3`、各問の選択肢は `choice1_1` などです。",
+      description: "3問の問題文は `question1`〜`question3`、各問の選択肢は `choice1_1` などです。",
       tasks: [
-        "3問すべての `\" \"` の中を書き換える",
+        "`question1`〜`question3` の問題文をすべて書き換える",
+        "各問の選択肢3つ（`choice1_1` など）をすべて書き換える",
         "「実行」を押す"
       ],
-      goal: "第1問〜第3問の文が自分の内容になったらクリア。",
+      exampleCompare: {
+        caption: "例（第1問）",
+        question: "日本一高い山は？",
+        questionFrom: "日本一高い山は？",
+        questionTo: "世界一高い山は？",
+        before: [
+          { index: 0, text: "富士山", correct: false },
+          { index: 1, text: "高尾山", correct: false },
+          { index: 2, text: "筑波山", correct: false }
+        ],
+        after: [
+          { index: 0, text: "エベレスト", correct: false },
+          { index: 1, text: "富士山", correct: false },
+          { index: 2, text: "キリマンジャロ", correct: false }
+        ],
+        showCorrectIndex: false,
+        indexNote: "3問とも、問題文と選択肢3つを自分のクイズに変えます。正解番号は次のSTEPで合わせます。"
+      },
+      goal: "3問すべての問題文と、各問の選択肢3つを変えて実行したらクリア。",
       hints: [
         "4問目は追加できません。`question4` は使えません。",
         "答えが3つの選択肢から選べる文にすると作りやすいです。",
-        "問題文だけ先に変えて、選択肢は次のSTEPで整えましょう。"
+        "このSTEPでは正解番号はまだ変えなくて大丈夫です。"
       ]
     },
     {
       number: 5,
-      title: "STEP 5：選択肢と正解を変える",
-      learn: "同じ問題で、選択肢と正解番号の両方を変えます。",
-      description: "同じ問題で、選択肢と正解番号の両方を変えます。",
+      title: "STEP 5：正解を設定しよう",
+      learn: "正解は `selectedIndex1 === 番号` のような番号で決まります。選択肢は STEP 4 で変えてある前提です。",
+      description: "正解は `selectedIndex1 === 番号` のような番号で決まります。選択肢は STEP 4 で変えてある前提です。",
       tasks: [
-        "どれか1問の選択肢（`choice1_1` など）を新しい答えに書き換える",
-        "同じ問題の正解番号（`selectedIndex1 === 番号`）を新しい正解の位置に合わせる",
+        "STEP 4で作った問題のうち、どれか1問の正解番号を変える",
         "「実行」を押す",
-        "プレビューで「クイズをプレイ」し、新しい正解を選んで「正解！」を確認する"
+        "プレビューで、変えた問題の正しい選択肢を選ぶ",
+        "「正解！」が表示されたらクリア"
       ],
       exampleCompare: {
+        caption: "例（STEP 4で選択肢を変えたあと）",
         question: "日本一高い山は？",
         before: [
-          { index: 0, text: "富士山", correct: true },
-          { index: 1, text: "高尾山", correct: false },
-          { index: 2, text: "筑波山", correct: false }
+          { index: 0, text: "エベレスト", correct: true },
+          { index: 1, text: "富士山", correct: false },
+          { index: 2, text: "キリマンジャロ", correct: false }
         ],
         after: [
           { index: 0, text: "エベレスト", correct: false },
@@ -182,11 +202,11 @@
         ],
         correctIndexFrom: 0,
         correctIndexTo: 1,
-        indexNote: "コードの 0・1・2 は、上から1番目・2番目・3番目です。"
+        indexNote: "コードの 0・1・2 は、上から1番目・2番目・3番目です。選択肢は変えず、正解番号だけを合わせます。"
       },
-      goal: "選択肢と正解番号を変更し、実行後、新しい正解を選んで『正解！』が表示されたらクリア",
+      goal: "正解番号を変更し、実行後、新しい正解を選んで『正解！』が表示されたらクリア",
       hints: [
-        "第1問なら `choice1_1` と `selectedIndex1` のように、同じ問題の両方を変えます。",
+        "第1問なら `selectedIndex1 === 番号` を、新しい正解の位置に合わせます。",
         "正解番号は 0が1番上、1が2番目、2が3番目です。1,2,3 では書けません。",
         "「実行」と「正解！」の確認は別の操作です。どちらも必要です。"
       ]
@@ -197,12 +217,13 @@
     1: [],
     2: ["gameTitle"],
     3: ["backgroundColor", "textColor"],
-    4: ["question1", "question2", "question3"],
-    5: [
+    4: [
+      "question1", "question2", "question3",
       "choice1_1", "choice1_2", "choice1_3",
       "choice2_1", "choice2_2", "choice2_3",
       "choice3_1", "choice3_2", "choice3_3"
-    ]
+    ],
+    5: []
   };
 
   function tokenize(source) {
@@ -1416,6 +1437,31 @@
     }
   }
 
+  function getStep4ChangeSummary(work, initialWork) {
+    var changedQuestions = 0;
+    var changedChoices = 0;
+    var i;
+    var j;
+    for (i = 0; i < WORK_LIMITS.questionCount; i++) {
+      if (work && initialWork && work.questions && initialWork.questions && work.questions[i] && initialWork.questions[i]) {
+        if (work.questions[i].question !== initialWork.questions[i].question) {
+          changedQuestions = changedQuestions + 1;
+        }
+        for (j = 0; j < WORK_LIMITS.choiceCount; j++) {
+          if (work.questions[i].choices[j] !== initialWork.questions[i].choices[j]) {
+            changedChoices = changedChoices + 1;
+          }
+        }
+      }
+    }
+    return {
+      changedQuestions: changedQuestions,
+      changedChoices: changedChoices,
+      totalQuestions: WORK_LIMITS.questionCount,
+      totalChoices: WORK_LIMITS.questionCount * WORK_LIMITS.choiceCount
+    };
+  }
+
   function getStep5QuestionStates(work, initialWork) {
     var states = [];
     var i;
@@ -1456,6 +1502,22 @@
   function questionHasPairedStep5Edits(work, initialWork, questionIndex) {
     var states = getStep5QuestionStates(work, initialWork);
     return !!(states[questionIndex] && states[questionIndex].paired === true);
+  }
+
+  function hasChangedCorrectIndex(work, initialWork) {
+    var states = getStep5QuestionStates(work, initialWork);
+    var i;
+    for (i = 0; i < states.length; i++) {
+      if (states[i].answerChanged === true) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function questionHasChangedCorrectIndex(work, initialWork, questionIndex) {
+    var states = getStep5QuestionStates(work, initialWork);
+    return !!(states[questionIndex] && states[questionIndex].answerChanged === true);
   }
 
   function getStep5ChangeSummary(work, initialWork) {
@@ -1558,27 +1620,25 @@
     }
 
     if (stepNumber === 4) {
-      var changedQuestions = 0;
-      for (i = 0; i < WORK_LIMITS.questionCount; i++) {
-        if (work.questions[i].question !== initialWork.questions[i].question) {
-          changedQuestions = changedQuestions + 1;
-        }
-      }
-      if (changedQuestions !== WORK_LIMITS.questionCount) {
+      var step4Changes = getStep4ChangeSummary(work, initialWork);
+      if (
+        step4Changes.changedQuestions !== step4Changes.totalQuestions ||
+        step4Changes.changedChoices !== step4Changes.totalChoices
+      ) {
         return {
           done: false,
-          message: "未達成：`question1`〜`question3` の問題文を自分のクイズに変えましょう（変更済み " + changedQuestions + "/3）。"
+          message: "未達成：3問の問題文と、各問の選択肢3つをすべて変えましょう（問題文 " + step4Changes.changedQuestions + "/" + step4Changes.totalQuestions + "、選択肢 " + step4Changes.changedChoices + "/" + step4Changes.totalChoices + "）。"
         };
       }
       if (ranCurrentCode !== true) {
         return {
           done: false,
-          message: "未達成：3問の問題文を変えたら「実行」を押して確認しましょう。"
+          message: "未達成：問題文と選択肢を変えたら「実行」を押して確認しましょう。"
         };
       }
       return {
         done: true,
-        message: "達成：3問の問題文を変えて実行しました。"
+        message: "達成：3問の問題文と選択肢を変えて実行しました。"
       };
     }
 
@@ -1593,34 +1653,33 @@
     var editorMatchesLastRun = extra.editorMatchesLastRun === true;
     var lastRunWork = extra.lastRunWork || null;
     var confirmedNewCorrect = extra.confirmedNewCorrect === true;
-    var parsedChanges = getStep5ChangeSummary(work, initialWork);
-    var parsedReady = hasPairedStep5Question(work, initialWork);
-    var runReady = hasPairedStep5Question(lastRunWork, initialWork);
+    var parsedReady = hasChangedCorrectIndex(work, initialWork);
+    var runReady = hasChangedCorrectIndex(lastRunWork, initialWork);
 
     if (parsedReady !== true) {
       return {
         done: false,
-        message: "未達成：同じ問題で選択肢と正解番号の両方を変えましょう（選択肢を変えた問 " + parsedChanges.changedChoices + "、正解番号を変えた問 " + parsedChanges.changedAnswers + "、両方そろった問 " + parsedChanges.pairedQuestions + "）。番号は0が1番目・1が2番目・2が3番目です。"
+        message: "未達成：どれか1問の正解番号（`selectedIndex1 === 番号` など）を変えましょう。番号は0が1番目・1が2番目・2が3番目です。"
       };
     }
 
     if (runReady !== true || editorMatchesLastRun !== true) {
       return {
         done: false,
-        message: "未達成：同じ問題の選択肢と正解番号の変更を実行し、その問題で新しい正解（0=1番目、1=2番目、2=3番目）を選んで判定を確認しましょう。"
+        message: "未達成：正解番号の変更を実行し、その問題で新しい正解（0=1番目、1=2番目、2=3番目）を選んで判定を確認しましょう。"
       };
     }
 
     if (confirmedNewCorrect !== true) {
       return {
         done: false,
-        message: "未達成：実行済みです。変更した問題で新しい正解を選び、「正解！」と出るか確認しましょう。"
+        message: "未達成：実行済みです。正解番号を変えた問題で新しい正解を選び、「正解！」と出るか確認しましょう。"
       };
     }
 
     return {
       done: true,
-      message: "達成：選択肢と正解番号を変え、新しい正解で判定を確認しました。"
+      message: "達成：正解番号を変え、新しい正解で判定を確認しました。"
     };
   }
 
@@ -2276,10 +2335,13 @@
     cloneWorkData: cloneWorkData,
     cloneQuestions: cloneQuestions,
     validateWorkData: validateWorkData,
+    getStep4ChangeSummary: getStep4ChangeSummary,
     getStep5ChangeSummary: getStep5ChangeSummary,
     getStep5QuestionStates: getStep5QuestionStates,
     hasPairedStep5Question: hasPairedStep5Question,
     questionHasPairedStep5Edits: questionHasPairedStep5Edits,
+    hasChangedCorrectIndex: hasChangedCorrectIndex,
+    questionHasChangedCorrectIndex: questionHasChangedCorrectIndex,
     hasCurrentRunEvidence: hasCurrentRunEvidence,
     evaluateStepProgress: evaluateStepProgress,
     areAllStepsComplete: areAllStepsComplete,
