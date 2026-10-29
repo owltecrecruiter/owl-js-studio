@@ -13,7 +13,11 @@ const {
   CODE_STATUS,
   DELIVERY_STATUS,
   ERROR_CODE,
+  CODE_EXPIRED_MESSAGE,
+  CODE_USED_MESSAGE,
   createBackend,
+  computePrivilegeExpiryDate,
+  formatExpiresAtJst,
   createSpreadsheetStorage,
   createLearnerBridgeHtml,
   createTrustedStandaloneQuizHtml,
@@ -389,7 +393,10 @@ test("special characters are escaped in generated HTML and bridge origin is fixe
   assert.ok(bridgeHtml.includes("bridgeVersion: bridgeVersion"));
   assert.ok(bridgeHtml.includes("event.origin !== allowedOrigin"));
   assert.ok(bridgeHtml.includes(".issueWorkFromBridge(data.payload || {})"));
+  assert.ok(bridgeHtml.includes("jsquiz:v0.8:auth"));
+  assert.ok(bridgeHtml.includes(".verifyAccessFromBridge(data.payload || {})"));
   assert.ok(bridgeHtml.indexOf("jsquiz:v0.7:ping") < bridgeHtml.indexOf(".issueWorkFromBridge(data.payload || {})"));
+  assert.ok(bridgeHtml.indexOf("jsquiz:v0.8:auth") < bridgeHtml.indexOf(".issueWorkFromBridge(data.payload || {})"));
   assert.strictEqual(bridgeHtml.indexOf("adminGenerateCode"), -1);
   assert.strictEqual(bridgeHtml.indexOf("adminDisableCode"), -1);
   assert.strictEqual(bridgeHtml.indexOf("adminStatusLookup"), -1);
@@ -1237,6 +1244,156 @@ test("retry after a saved Drive file does not create a duplicate file", function
   assert.strictEqual(second.idempotent, true);
   assert.strictEqual(second.workId, first.workId);
   assert.strictEqual(fixture.delivery.sent.length, 1);
+});
+
+test("calendar-month expiry clamps to month-end and leap day", function () {
+  const jan31 = computePrivilegeExpiryDate("2026-01-31T06:00:00.000Z");
+  assert.strictEqual(jan31.toISOString(), "2026-02-28T06:00:00.000Z");
+  const leapJan31 = computePrivilegeExpiryDate("2024-01-31T06:00:00.000Z");
+  assert.strictEqual(leapJan31.toISOString(), "2024-02-29T06:00:00.000Z");
+  const oct31 = computePrivilegeExpiryDate("2026-10-31T01:00:00.000Z");
+  assert.strictEqual(oct31.toISOString(), "2026-11-30T01:00:00.000Z");
+  const mar31 = computePrivilegeExpiryDate("2026-03-31T06:00:00.000Z");
+  assert.strictEqual(mar31.toISOString(), "2026-04-30T06:00:00.000Z");
+  assert.strictEqual(formatExpiresAtJst(jan31), "2026年2月28日 15:00 JST");
+  assert.strictEqual(computePrivilegeExpiryDate(""), null);
+});
+
+test("verifyAccess does not consume a valid code", function () {
+  const fixture = createFixture();
+  const generated = generateCode(fixture, "ACCESS01", true);
+  const first = fixture.backend.verifyAccess({ code: "ACCESS01", clientKey: "local", requestId: "req-access-1" });
+  assert.strictEqual(first.ok, true);
+  assert.strictEqual(first.status, CODE_STATUS.VALID);
+  assert.strictEqual(first.expiresAt, "2026-11-21T07:32:00.000Z");
+  assert.strictEqual(first.expiresAtJst, "2026年11月21日 16:32 JST");
+  const stored = fixture.storage.findCodeById(generated.record.codeId);
+  assert.strictEqual(stored.status, CODE_STATUS.VALID);
+  assert.strictEqual(stored.redeemedAt, "");
+  const second = fixture.backend.verifyAccess({ code: "access01", clientKey: "local", requestId: "req-access-2" });
+  assert.strictEqual(second.ok, true);
+  assert.strictEqual(fixture.storage.findCodeById(generated.record.codeId).status, CODE_STATUS.VALID);
+  const issued = fixture.backend.issueWork({
+    code: "ACCESS01",
+    requestId: "req-access-issue",
+    email: "learner@example.com",
+    quizData: validQuizData
+  });
+  assert.strictEqual(issued.ok, true);
+  assert.strictEqual(fixture.storage.findCodeById(generated.record.codeId).status, CODE_STATUS.USED);
+});
+
+test("expired and used codes cannot start learning", function () {
+  const fixture = createFixture();
+  const generated = generateCode(fixture, "EXPIRE01", true);
+  const stored = fixture.storage.findCodeById(generated.record.codeId);
+  stored.issuedAt = "2026-08-21T07:32:00.000Z";
+  fixture.storage.updateCode(stored);
+  assertRejectsCode(function () {
+    fixture.backend.verifyAccess({ code: "EXPIRE01", clientKey: "local" });
+  }, ERROR_CODE.CODE_EXPIRED);
+  assert.strictEqual(fixture.storage.findCodeById(generated.record.codeId).status, CODE_STATUS.VALID);
+
+  const usedFixture = createFixture();
+  generateCode(usedFixture, "USEDACC1", true);
+  usedFixture.backend.issueWork({
+    code: "USEDACC1",
+    requestId: "req-used-access",
+    email: "learner@example.com",
+    quizData: validQuizData
+  });
+  assertRejectsCode(function () {
+    usedFixture.backend.verifyAccess({ code: "USEDACC1", clientKey: "local" });
+  }, ERROR_CODE.CODE_USED);
+});
+
+test("issueWork refuses a code that expired after learning started", function () {
+  const fixture = createFixture();
+  const generated = generateCode(fixture, "LATEEXP1", true);
+  const access = fixture.backend.verifyAccess({ code: "LATEEXP1", clientKey: "local" });
+  assert.strictEqual(access.ok, true);
+  const stored = fixture.storage.findCodeById(generated.record.codeId);
+  stored.issuedAt = "2026-08-21T07:32:00.000Z";
+  fixture.storage.updateCode(stored);
+  assertRejectsCode(function () {
+    fixture.backend.issueWork({
+      code: "LATEEXP1",
+      requestId: "req-late-exp",
+      email: "learner@example.com",
+      quizData: validQuizData
+    });
+  }, ERROR_CODE.CODE_EXPIRED);
+  assert.strictEqual(fixture.storage.findCodeById(generated.record.codeId).status, CODE_STATUS.VALID);
+  assert.strictEqual(fixture.delivery.sent.length, 0);
+});
+
+test("legacy long codes also expire from issuedAt", function () {
+  const fixture = createFixture();
+  const legacy = "A1B2-C3D4-E5F6-7890-ABCD-EF99";
+  const generated = generateCode(fixture, legacy, true);
+  const stored = fixture.storage.findCodeById(generated.record.codeId);
+  stored.issuedAt = "2026-08-21T07:32:00.000Z";
+  fixture.storage.updateCode(stored);
+  assertRejectsCode(function () {
+    fixture.backend.verifyAccess({ code: legacy, clientKey: "local" });
+  }, ERROR_CODE.CODE_EXPIRED);
+});
+
+test("missing issuedAt is treated as expired", function () {
+  const fixture = createFixture();
+  const generated = generateCode(fixture, "NOISSUE1", true);
+  const stored = fixture.storage.findCodeById(generated.record.codeId);
+  stored.issuedAt = "";
+  fixture.storage.updateCode(stored);
+  assertRejectsCode(function () {
+    fixture.backend.verifyAccess({ code: "NOISSUE1", clientKey: "local" });
+  }, ERROR_CODE.CODE_EXPIRED);
+});
+
+test("completed request retry stays idempotent after expiry", function () {
+  const fixture = createFixture();
+  generateCode(fixture, "IDEMEXP1", true);
+  const first = fixture.backend.issueWork({
+    code: "IDEMEXP1",
+    requestId: "req-idem-exp",
+    email: "learner@example.com",
+    quizData: validQuizData
+  });
+  const stored = fixture.storage.findCodeById(first.codeId);
+  stored.issuedAt = "2026-08-21T07:32:00.000Z";
+  fixture.storage.updateCode(stored);
+  const second = fixture.backend.issueWork({
+    code: "IDEMEXP1",
+    requestId: "req-idem-exp",
+    email: "learner@example.com",
+    quizData: validQuizData
+  });
+  assert.strictEqual(second.ok, true);
+  assert.strictEqual(second.idempotent, true);
+  assert.strictEqual(second.workId, first.workId);
+  assert.strictEqual(fixture.delivery.sent.length, 1);
+});
+
+test("learner page gates access and does not re-ask the code on CLEAR", function () {
+  const fs = require("fs");
+  const html = fs.readFileSync(path.join(__dirname, "..", "docs", "index.html"), "utf8");
+  const script = fs.readFileSync(path.join(__dirname, "..", "docs", "script.js"), "utf8");
+  const client = fs.readFileSync(path.join(__dirname, "..", "docs", "issuance-v06-client.js"), "utf8");
+  assert.ok(html.indexOf("access-locked") !== -1);
+  assert.ok(html.indexOf("id=\"access-gate\"") !== -1);
+  assert.ok(html.indexOf("id=\"access-code-input\"") !== -1);
+  assert.ok(html.indexOf("学習をはじめる") !== -1);
+  assert.strictEqual(html.indexOf("id=\"issuance-code-input\""), -1);
+  assert.ok(html.indexOf("issuance-auth-status") !== -1);
+  assert.ok(script.indexOf("verifyAccessCode") !== -1);
+  assert.ok(script.indexOf("owlJsStudio.privilegeCode") !== -1);
+  assert.ok(script.indexOf("authenticatedPrivilegeCode") !== -1);
+  assert.ok(script.indexOf("bootStudioAccess") !== -1);
+  assert.strictEqual(script.indexOf("searchParams.set(\"code\""), -1);
+  assert.ok(client.indexOf("jsquiz:v0.8:auth") !== -1);
+  assert.ok(client.indexOf("verifyAccessCode") !== -1);
+  assert.ok(CODE_EXPIRED_MESSAGE.indexOf("有効期限") !== -1);
+  assert.ok(CODE_USED_MESSAGE.indexOf("受け取り済み") !== -1);
 });
 
 test("existing v0.5 issuance module remains loadable", function () {

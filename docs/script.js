@@ -76,17 +76,22 @@ const hintButton = document.getElementById("hint-button");
 const hintList = document.getElementById("hint-list");
 const completionGuide = document.getElementById("completion-guide");
 const receiveQuizButton = document.getElementById("receive-quiz-button");
+const accessGate = document.getElementById("access-gate");
+const accessCodeInput = document.getElementById("access-code-input");
+const accessGateStatus = document.getElementById("access-gate-status");
+const accessStartButton = document.getElementById("access-start-button");
 const issuanceDialog = document.getElementById("issuance-dialog");
 const issuanceFormView = document.getElementById("issuance-form-view");
 const issuancePendingView = document.getElementById("issuance-pending-view");
 const issuanceResultView = document.getElementById("issuance-result-view");
-const issuanceCodeInput = document.getElementById("issuance-code-input");
+const issuanceAuthStatus = document.getElementById("issuance-auth-status");
 const issuanceFormStatus = document.getElementById("issuance-form-status");
 const issuanceCancelButton = document.getElementById("issuance-cancel-button");
 const issuanceSubmitButton = document.getElementById("issuance-submit-button");
 const issuanceDoneButton = document.getElementById("issuance-done-button");
 const issuanceResultTitle = document.getElementById("issuance-result-title");
 const issuanceResultBody = document.getElementById("issuance-result-body");
+const PRIVILEGE_CODE_STORAGE_KEY = "owlJsStudio.privilegeCode";
 const activityEditor = document.getElementById("activity-editor");
 const activityGuide = document.getElementById("activity-guide");
 const guideSidebar = document.getElementById("guide-sidebar");
@@ -161,6 +166,10 @@ let furiganaHasBeenOn = false;
 let resetDialogLastFocus = null;
 let issuanceLastFocus = null;
 let issuanceInFlight = false;
+let accessInFlight = false;
+let studioInitialized = false;
+let authenticatedPrivilegeCode = "";
+let authenticatedExpiresAtJst = "";
 let announcedAllStepsComplete = false;
 let learningComplete = false;
 const announcedStepClears = {
@@ -1813,8 +1822,12 @@ function openIssuanceDialog() {
     }
     return;
   }
+  if (!authenticatedPrivilegeCode) {
+    appendConsole("error", "特典コードの認証が必要です。ページを再読み込みして、学習をはじめてください。");
+    return;
+  }
   if (isIssuanceDialogOpen()) {
-    issuanceCodeInput.focus();
+    issuanceSubmitButton.focus();
     return;
   }
   issuanceLastFocus = document.activeElement;
@@ -1822,12 +1835,15 @@ function openIssuanceDialog() {
   issuanceDialog.removeAttribute("hidden");
   issuanceDialog.classList.remove("hidden");
   setIssuanceView("form");
-  issuanceCodeInput.value = "";
-  issuanceCodeInput.disabled = false;
   issuanceSubmitButton.disabled = false;
   issuanceCancelButton.disabled = false;
   setIssuanceFormStatus("", false);
-  issuanceCodeInput.focus();
+  if (issuanceAuthStatus) {
+    issuanceAuthStatus.textContent = authenticatedExpiresAtJst
+      ? "特典コードは認証済みです。有効期限: " + authenticatedExpiresAtJst
+      : "特典コードは認証済みです。";
+  }
+  issuanceSubmitButton.focus();
 }
 
 function closeIssuanceDialog() {
@@ -1859,10 +1875,9 @@ function submitIssuanceRequest() {
     setIssuanceFormStatus("発行申請を処理中です。完了するまでお待ちください。", true);
     return;
   }
-  const code = issuanceCodeInput.value.replace(/\s+/g, "").trim();
+  const code = authenticatedPrivilegeCode.replace(/\s+/g, "").trim();
   if (code === "") {
-    setIssuanceFormStatus("特典コードを入力してください。半角英数字8文字で、ハイフンは不要です。", true);
-    issuanceCodeInput.focus();
+    setIssuanceFormStatus("特典コードの認証が必要です。ページを再読み込みして、学習をはじめてください。", true);
     return;
   }
   if (!getLastValidQuizData()) {
@@ -1885,7 +1900,6 @@ function submitIssuanceRequest() {
   issuanceInFlight = true;
   issuanceSubmitButton.disabled = true;
   issuanceCancelButton.disabled = true;
-  issuanceCodeInput.disabled = true;
   setIssuanceView("pending");
 
   let issuePromise;
@@ -1895,7 +1909,6 @@ function submitIssuanceRequest() {
     issuanceInFlight = false;
     issuanceSubmitButton.disabled = false;
     issuanceCancelButton.disabled = false;
-    issuanceCodeInput.disabled = false;
     setIssuanceView("form");
     setIssuanceFormStatus(formatIssuanceErrorCopy(error), true);
     return;
@@ -1905,7 +1918,6 @@ function submitIssuanceRequest() {
     issuanceInFlight = false;
     issuanceSubmitButton.disabled = false;
     issuanceCancelButton.disabled = false;
-    issuanceCodeInput.disabled = false;
     if (!result || result.ok !== true) {
       setIssuanceView("form");
       setIssuanceFormStatus("発行できませんでした。時間をおいてもう一度お試しください。", true);
@@ -1916,7 +1928,6 @@ function submitIssuanceRequest() {
     issuanceInFlight = false;
     issuanceSubmitButton.disabled = false;
     issuanceCancelButton.disabled = false;
-    issuanceCodeInput.disabled = false;
     setIssuanceView("form");
     setIssuanceFormStatus(formatIssuanceErrorCopy(error), true);
   });
@@ -1933,7 +1944,7 @@ function handleIssuanceDialogKeydown(event) {
     }
     return true;
   }
-  if (event.key === "Enter" && event.target === issuanceCodeInput) {
+  if (event.key === "Enter" && event.target !== issuanceCancelButton) {
     event.preventDefault();
     submitIssuanceRequest();
     return true;
@@ -1983,6 +1994,157 @@ function initializeLearningState() {
   initialQuizSnapshot = cloneWorkData(initialParsed.work);
   lastValidQuizData = cloneWorkData(initialParsed.work);
   lastValidSourceCode = INITIAL_CODE;
+}
+
+function setAccessGateStatus(message, isError) {
+  if (!accessGateStatus) {
+    return;
+  }
+  accessGateStatus.textContent = message || "";
+  accessGateStatus.className = isError ? "issuance-status error" : "issuance-status";
+}
+
+function getStoredPrivilegeCode() {
+  try {
+    return String(sessionStorage.getItem(PRIVILEGE_CODE_STORAGE_KEY) || "").replace(/\s+/g, "").trim();
+  } catch (error) {
+    return "";
+  }
+}
+
+function storePrivilegeCode(code) {
+  try {
+    sessionStorage.setItem(PRIVILEGE_CODE_STORAGE_KEY, code);
+  } catch (error) {
+    return;
+  }
+}
+
+function clearStoredPrivilegeCode() {
+  try {
+    sessionStorage.removeItem(PRIVILEGE_CODE_STORAGE_KEY);
+  } catch (error) {
+    return;
+  }
+}
+
+function shouldClearStoredPrivilegeCode(error) {
+  const message = error && error.message ? String(error.message) : "";
+  return message.indexOf("有効期限") !== -1 || message.indexOf("受け取り済み") !== -1 || message.indexOf("使用されています") !== -1;
+}
+
+function setStudioAccessLocked() {
+  document.body.classList.add("access-locked");
+  document.body.classList.remove("access-open");
+  if (accessGate) {
+    accessGate.hidden = false;
+    accessGate.removeAttribute("hidden");
+  }
+}
+
+function unlockStudioAccess(code, authResult) {
+  authenticatedPrivilegeCode = code;
+  authenticatedExpiresAtJst = authResult && authResult.expiresAtJst ? String(authResult.expiresAtJst) : "";
+  storePrivilegeCode(code);
+  document.body.classList.remove("access-locked");
+  document.body.classList.add("access-open");
+  if (accessGate) {
+    accessGate.hidden = true;
+    accessGate.setAttribute("hidden", "");
+  }
+  if (studioInitialized !== true) {
+    startStudioAfterAccess();
+  }
+}
+
+function startStudioAfterAccess() {
+  studioInitialized = true;
+  initializeLearningState();
+  setGuideOpen(true);
+  appendConsole("info", "初期コードを読み込みました。左の学習ガイドの STEP 1 から進めましょう。プレビューは作成中のクイズを試す画面です。");
+  setEditorCode(INITIAL_CODE);
+  resetEditorHistoryBaseline();
+  applyCodeToPreview();
+}
+
+function verifyAndUnlockStudio(code) {
+  if (accessInFlight === true) {
+    setAccessGateStatus("特典コードを確認しています。完了するまでお待ちください。", true);
+    return;
+  }
+  if (getGasBridgeUrl() === "" && typeof window.createOwlJsStudioIssueClient !== "function") {
+    setAccessGateStatus("サーバーに接続できません。管理者に連絡してください。", true);
+    return;
+  }
+
+  let client;
+  try {
+    client = createStudioIssueClient();
+  } catch (error) {
+    setAccessGateStatus(formatIssuanceErrorCopy(error), true);
+    return;
+  }
+  if (!client || typeof client.verifyAccessCode !== "function") {
+    setAccessGateStatus("サーバーに接続できません。管理者に連絡してください。", true);
+    return;
+  }
+
+  accessInFlight = true;
+  accessStartButton.disabled = true;
+  accessCodeInput.disabled = true;
+  setAccessGateStatus("特典コードを確認しています。", false);
+
+  let accessPromise;
+  try {
+    accessPromise = client.verifyAccessCode({ code: code });
+  } catch (error) {
+    accessInFlight = false;
+    accessStartButton.disabled = false;
+    accessCodeInput.disabled = false;
+    setAccessGateStatus(formatIssuanceErrorCopy(error), true);
+    return;
+  }
+
+  Promise.resolve(accessPromise).then(function (result) {
+    accessInFlight = false;
+    accessStartButton.disabled = false;
+    accessCodeInput.disabled = false;
+    if (!result || result.ok !== true) {
+      setAccessGateStatus("特典コードを確認できませんでした。", true);
+      return;
+    }
+    unlockStudioAccess(code, result);
+  }).catch(function (error) {
+    accessInFlight = false;
+    accessStartButton.disabled = false;
+    accessCodeInput.disabled = false;
+    if (shouldClearStoredPrivilegeCode(error)) {
+      clearStoredPrivilegeCode();
+    }
+    setAccessGateStatus(formatIssuanceErrorCopy(error), true);
+    accessCodeInput.focus();
+  });
+}
+
+function startLearningAccess() {
+  const code = accessCodeInput.value.replace(/\s+/g, "").trim();
+  if (code === "") {
+    setAccessGateStatus("特典コードを入力してください。半角英数字8文字で、ハイフンは不要です。", true);
+    accessCodeInput.focus();
+    return;
+  }
+  verifyAndUnlockStudio(code);
+}
+
+function bootStudioAccess() {
+  setStudioAccessLocked();
+  const stored = getStoredPrivilegeCode();
+  if (stored) {
+    accessCodeInput.value = stored;
+    verifyAndUnlockStudio(stored);
+    return;
+  }
+  accessCodeInput.focus();
 }
 
 function setGuideOpen(open) {
@@ -2287,16 +2449,23 @@ receiveQuizButton.addEventListener("click", openIssuanceDialog);
 issuanceCancelButton.addEventListener("click", closeIssuanceDialog);
 issuanceDoneButton.addEventListener("click", closeIssuanceDialog);
 issuanceSubmitButton.addEventListener("click", submitIssuanceRequest);
-issuanceCodeInput.addEventListener("input", function () {
-  const start = issuanceCodeInput.selectionStart;
-  const end = issuanceCodeInput.selectionEnd;
-  const next = issuanceCodeInput.value.toUpperCase();
-  if (next === issuanceCodeInput.value) {
+accessStartButton.addEventListener("click", startLearningAccess);
+accessCodeInput.addEventListener("input", function () {
+  const start = accessCodeInput.selectionStart;
+  const end = accessCodeInput.selectionEnd;
+  const next = accessCodeInput.value.toUpperCase();
+  if (next === accessCodeInput.value) {
     return;
   }
-  issuanceCodeInput.value = next;
+  accessCodeInput.value = next;
   if (typeof start === "number" && typeof end === "number") {
-    issuanceCodeInput.setSelectionRange(start, end);
+    accessCodeInput.setSelectionRange(start, end);
+  }
+});
+accessCodeInput.addEventListener("keydown", function (event) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    startLearningAccess();
   }
 });
 
@@ -2320,12 +2489,7 @@ previewBackButton.addEventListener("click", previewGoBack);
 previewForwardButton.addEventListener("click", previewGoForward);
 previewRestartButton.addEventListener("click", previewRestartFromTitle);
 
-initializeLearningState();
-setGuideOpen(true);
-appendConsole("info", "初期コードを読み込みました。左の学習ガイドの STEP 1 から進めましょう。プレビューは作成中のクイズを試す画面です。");
-setEditorCode(INITIAL_CODE);
-resetEditorHistoryBaseline();
-applyCodeToPreview();
+bootStudioAccess();
 window.getLastValidQuizData = getLastValidQuizData;
 window.generateStandaloneQuizHtmlForCurrentEditor = generateStandaloneQuizHtmlForCurrentEditor;
 window.updateEditorView = updateEditorView;
@@ -2422,4 +2586,11 @@ window.submitIssuanceRequest = submitIssuanceRequest;
 window.getGasBridgeUrl = getGasBridgeUrl;
 window.isIssuanceInFlight = function () {
   return issuanceInFlight === true;
+};
+window.startLearningAccess = startLearningAccess;
+window.getAuthenticatedPrivilegeCode = function () {
+  return authenticatedPrivilegeCode;
+};
+window.isStudioAccessUnlocked = function () {
+  return document.body.classList.contains("access-open");
 };

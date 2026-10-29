@@ -84,6 +84,7 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     CODE_NOT_FOUND: "CODE_NOT_FOUND",
     CODE_DISABLED: "CODE_DISABLED",
     CODE_USED: "CODE_USED",
+    CODE_EXPIRED: "CODE_EXPIRED",
     ATTENDANCE_NOT_CONFIRMED: "ATTENDANCE_NOT_CONFIRMED",
     INVALID_EMAIL: "INVALID_EMAIL",
     INVALID_QUIZ_DATA: "INVALID_QUIZ_DATA",
@@ -105,6 +106,9 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
   var OUTPUT_FOLDER_UNAVAILABLE_MESSAGE = "成果物の保存先フォルダにアクセスできません。フォルダの共有設定を確認し、学習者用GAS実行アカウントへ編集権限を付与してください。Drive直下には保存しません。";
   var APPLICANT_NAME_MISSING_MESSAGE = "応募者氏名が登録されていないため、成果物を保存できません。面接官の発行内容を確認してください。";
   var CODE_NOT_FOUND_MESSAGE = "発行コードが正しくありません。半角英数字8文字（ハイフン不要）か、以前お渡ししたコードをもう一度確認してください。";
+  var CODE_EXPIRED_MESSAGE = "この特典コードの有効期限が切れています。";
+  var CODE_USED_MESSAGE = "この特典コードは作品の受け取り済みです。";
+  var JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
   var QUIZ_LIMITS = Object.freeze({
     questionCount: 3,
@@ -170,6 +174,7 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
       },
       generateCode: generateCode,
       verifyCode: verifyCode,
+      verifyAccess: verifyAccess,
       issueWork: issueWork,
       disableCode: disableCode,
       statusLookup: statusLookup,
@@ -250,7 +255,7 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
         throw new IssuanceError(ERROR_CODE.CODE_NOT_FOUND, CODE_NOT_FOUND_MESSAGE);
       }
       try {
-        validateCodeCanIssue(row);
+        validateCodeCanIssue(row, time.nowIso());
       } catch (error) {
         appendRejectedAttempt(row.codeId, "", error && error.code ? error.code : ERROR_CODE.INVALID_REQUEST, {
           codeHash: codeHash,
@@ -262,8 +267,90 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
         ok: true,
         codeId: row.codeId,
         attendanceConfirmed: row.attendanceConfirmed === true,
-        status: row.status
+        status: row.status,
+        expiresAt: publicCodeRecord(row).expiresAt,
+        expiresAtJst: publicCodeRecord(row).expiresAtJst
       };
+    }
+
+    function verifyAccess(input) {
+      var request = input || {};
+      var normalizedCode = "";
+      var codeHash = "";
+      var matchedRow = null;
+      try {
+        normalizedCode = normalizeCode(request.code);
+        matchedRow = findStoredCode(request.code);
+        codeHash = matchedRow ? matchedRow.codeHash : hashCode(normalizedCode);
+      } catch (error) {
+        appendRejectedAttempt("", safeRequestId(request.requestId), error && error.code ? error.code : ERROR_CODE.INVALID_REQUEST, {
+          codeHash: codeHash,
+          clientKey: request.clientKey || ""
+        });
+        throw error;
+      }
+      rateLimiter.check({
+        action: "verifyAccess",
+        code: normalizedCode,
+        codeHash: codeHash,
+        clientKey: request.clientKey || ""
+      });
+      try {
+        attemptLimiter.assertAllowed({
+          action: "verifyAccess",
+          codeHash: codeHash,
+          clientKey: request.clientKey || "",
+          requestId: safeRequestId(request.requestId)
+        });
+      } catch (error) {
+        appendRejectedAttempt("", safeRequestId(request.requestId), error && error.code ? error.code : ERROR_CODE.RATE_LIMITED, {
+          codeHash: codeHash,
+          clientKey: request.clientKey || ""
+        });
+        throw error;
+      }
+
+      return lockManager.acquire("issuance:code:" + (codeHash || "unknown"), function () {
+        var row = storage.findCodeByHash(codeHash);
+        if (!row) {
+          row = findStoredCode(request.code);
+        }
+        if (!row) {
+          recordRejectedAttempt("", safeRequestId(request.requestId), ERROR_CODE.CODE_NOT_FOUND, {
+            codeHash: codeHash,
+            clientKey: request.clientKey || ""
+          });
+          throw new IssuanceError(ERROR_CODE.CODE_NOT_FOUND, CODE_NOT_FOUND_MESSAGE);
+        }
+        try {
+          validateCodeCanIssue(row, time.nowIso());
+        } catch (error) {
+          recordRejectedAttempt(row.codeId, safeRequestId(request.requestId), error && error.code ? error.code : ERROR_CODE.INVALID_REQUEST, {
+            codeHash: codeHash,
+            clientKey: request.clientKey || ""
+          });
+          throw error;
+        }
+        try {
+          attemptLimiter.recordSuccess({
+            action: "verifyAccess",
+            codeHash: codeHash,
+            clientKey: request.clientKey || "",
+            requestId: safeRequestId(request.requestId)
+          });
+        } catch (error) {
+          logInfo("attemptLimiter.recordSuccess failed: " + (error && error.message ? error.message : String(error)));
+        }
+        appendHistory(row.codeId, "code_access_verified", safeRequestId(request.requestId), {
+          expiresAt: publicCodeRecord(row).expiresAt
+        });
+        return {
+          ok: true,
+          status: row.status,
+          expiresAt: publicCodeRecord(row).expiresAt,
+          expiresAtJst: publicCodeRecord(row).expiresAtJst
+        };
+      });
     }
 
     function issueWork(input) {
@@ -390,7 +477,7 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
           return reused;
         }
         try {
-          validateCodeCanIssue(row);
+          validateCodeCanIssue(row, time.nowIso());
         } catch (error) {
           recordRejectedAttempt(row.codeId, requestId, error && error.code ? error.code : ERROR_CODE.INVALID_REQUEST, {
             codeHash: codeHash,
@@ -1305,18 +1392,19 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
       "'use strict';",
       "const allowedOrigin=" + serializedAllowedOrigin + ";",
       "const injectedBridgeSession=" + serializedBridgeSession + ";",
-      "const bridgeVersion='v0.7-connectivity-diagnostics';",
+      "const bridgeVersion='v0.8-access-auth';",
       "const statusEl = document.getElementById('status');",
       "let bridgeSession = injectedBridgeSession;",
       "let readyPosted = false;",
       "resolveBridgeSessionAndPostReady();",
       "window.addEventListener('message', function (event) {",
       "  const data = event.data || {};",
-      "  if (data.type !== 'jsquiz:v0.6:issue' && data.type !== 'jsquiz:v0.7:ping') { return; }",
+      "  if (data.type !== 'jsquiz:v0.6:issue' && data.type !== 'jsquiz:v0.7:ping' && data.type !== 'jsquiz:v0.8:auth') { return; }",
       "  postBridgeDiagnostic('message_received', { receivedType: String(data.type || ''), hasRequestId: Boolean(data.requestId), hasBridgeSession: Boolean(data.bridgeSession), learnerOriginConfigured: Boolean(allowedOrigin), messageOrigin: event.origin || '' });",
       "  if (!allowedOrigin || event.origin !== allowedOrigin) { statusEl.textContent = '許可されていない送信元です。'; postBridgeDiagnostic('origin_rejected', { receivedType: String(data.type || ''), learnerOriginConfigured: Boolean(allowedOrigin), messageOrigin: event.origin || '' }); return; }",
       "  if (bridgeSession && data.bridgeSession !== bridgeSession) { statusEl.textContent = 'bridge session が一致しません。'; postBridgeDiagnostic('bridge_session_rejected', { receivedType: String(data.type || ''), hasBridgeSession: Boolean(data.bridgeSession) }); return; }",
       "  if (data.type === 'jsquiz:v0.7:ping') { statusEl.textContent = '接続確認に応答しました。'; postToLearner({ type: 'jsquiz:v0.7:pong', requestId: data.requestId || '', bridgeSession: bridgeSession, ok: true, timestamp: new Date().toISOString(), observedOrigin: event.origin, locationOrigin: safeLocationOrigin(), learnerOriginConfigured: Boolean(allowedOrigin), bridgeVersion: bridgeVersion }); return; }",
+      "  if (data.type === 'jsquiz:v0.8:auth') { statusEl.textContent = '特典コードを確認しています...'; google.script.run.withSuccessHandler(function (result) { statusEl.textContent = result && result.ok ? '特典コードを確認しました。' : '特典コードを確認できませんでした。'; postToLearner({ type: 'jsquiz:v0.8:auth-result', requestId: data.requestId || '', bridgeSession: bridgeSession, result: result }); }).withFailureHandler(function (error) { statusEl.textContent = '特典コードを確認できませんでした。'; postToLearner({ type: 'jsquiz:v0.8:auth-error', requestId: data.requestId || '', bridgeSession: bridgeSession, message: error && error.message ? error.message : String(error) }); }).verifyAccessFromBridge(data.payload || {}); return; }",
       "  statusEl.textContent = '発行処理中です...';",
       "  google.script.run",
       "    .withSuccessHandler(function (result) { statusEl.textContent = result.deliveryStatus === 'sent' ? '発行しました。メールを確認してください。' : '発行しましたが、配送に失敗しました。管理者に連絡してください。'; postToLearner({ type: 'jsquiz:v0.6:result', requestId: data.requestId || '', bridgeSession: bridgeSession, result: result }); })",
@@ -1471,6 +1559,13 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     return createDefaultGasBackend().issueWork(payload);
   }
 
+  function verifyAccessFromBridge(payload) {
+    if (isAdminWebApp(createGasConfigAdapter())) {
+      throw new IssuanceError(ERROR_CODE.AUTH_REQUIRED, "この操作は利用できません。");
+    }
+    return createDefaultGasBackend().verifyAccess(payload);
+  }
+
   function jsonOutput(value) {
     return ContentService
       .createTextOutput(stringifyJson(value))
@@ -1496,18 +1591,102 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     }
   }
 
-  function validateCodeCanIssue(row) {
+  function pad2(value) {
+    return (value < 10 ? "0" : "") + String(value);
+  }
+
+  function parseIssuedAt(value) {
+    if (!value) {
+      return null;
+    }
+    var date = new Date(value);
+    if (isNaN(date.getTime())) {
+      return null;
+    }
+    return date;
+  }
+
+  function toJstParts(date) {
+    var jst = new Date(date.getTime() + JST_OFFSET_MS);
+    return {
+      year: jst.getUTCFullYear(),
+      month: jst.getUTCMonth(),
+      day: jst.getUTCDate(),
+      hour: jst.getUTCHours(),
+      minute: jst.getUTCMinutes(),
+      second: jst.getUTCSeconds(),
+      millisecond: jst.getUTCMilliseconds()
+    };
+  }
+
+  function fromJstParts(parts) {
+    return new Date(Date.UTC(parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second, parts.millisecond) - JST_OFFSET_MS);
+  }
+
+  function daysInCalendarMonth(year, monthIndex) {
+    return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+  }
+
+  function computePrivilegeExpiryDate(issuedAt) {
+    var issued = parseIssuedAt(issuedAt);
+    if (!issued) {
+      return null;
+    }
+    var parts = toJstParts(issued);
+    var targetYear = parts.year;
+    var targetMonth = parts.month + 1;
+    if (targetMonth > 11) {
+      targetMonth = 0;
+      targetYear += 1;
+    }
+    var maxDay = daysInCalendarMonth(targetYear, targetMonth);
+    var targetDay = parts.day > maxDay ? maxDay : parts.day;
+    return fromJstParts({
+      year: targetYear,
+      month: targetMonth,
+      day: targetDay,
+      hour: parts.hour,
+      minute: parts.minute,
+      second: parts.second,
+      millisecond: parts.millisecond
+    });
+  }
+
+  function formatExpiresAtJst(date) {
+    if (!date) {
+      return "";
+    }
+    var parts = toJstParts(date);
+    return parts.year + "年" + (parts.month + 1) + "月" + parts.day + "日 " + pad2(parts.hour) + ":" + pad2(parts.minute) + " JST";
+  }
+
+  function isPrivilegeCodeExpired(row, nowIso) {
+    var expiry = computePrivilegeExpiryDate(row && row.issuedAt);
+    if (!expiry) {
+      return true;
+    }
+    var now = parseIssuedAt(nowIso);
+    if (!now) {
+      now = new Date();
+    }
+    return now.getTime() > expiry.getTime();
+  }
+
+  function validateCodeCanIssue(row, nowIso) {
     if (row.status === CODE_STATUS.DISABLED) {
       throw new IssuanceError(ERROR_CODE.CODE_DISABLED, "この発行コードは無効化されています。");
     }
     if (row.status === CODE_STATUS.USED) {
-      throw new IssuanceError(ERROR_CODE.CODE_USED, "この発行コードはすでに使用されています。");
+      throw new IssuanceError(ERROR_CODE.CODE_USED, CODE_USED_MESSAGE);
     }
     if (row.status !== CODE_STATUS.VALID) {
       throw new IssuanceError(ERROR_CODE.INVALID_REQUEST, "この発行コードの状態では発行できません。");
     }
     if (row.attendanceConfirmed !== true && row.attendanceConfirmed !== "true") {
       throw new IssuanceError(ERROR_CODE.ATTENDANCE_NOT_CONFIRMED, "出席確認が完了していないため発行できません。");
+    }
+    if (isPrivilegeCodeExpired(row, nowIso)) {
+      throw new IssuanceError(ERROR_CODE.CODE_EXPIRED, CODE_EXPIRED_MESSAGE);
     }
   }
 
@@ -2063,6 +2242,9 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
   function publicCodeRecord(row) {
     var copy = clone(row);
     delete copy.codeHash;
+    var expiry = computePrivilegeExpiryDate(row && row.issuedAt);
+    copy.expiresAt = expiry ? expiry.toISOString() : "";
+    copy.expiresAtJst = expiry ? formatExpiresAtJst(expiry) : "";
     return copy;
   }
 
@@ -2178,11 +2360,16 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     PRIVILEGE_CODE_ALPHABET: PRIVILEGE_CODE_ALPHABET,
     PRIVILEGE_CODE_LENGTH: PRIVILEGE_CODE_LENGTH,
     CODE_NOT_FOUND_MESSAGE: CODE_NOT_FOUND_MESSAGE,
+    CODE_EXPIRED_MESSAGE: CODE_EXPIRED_MESSAGE,
+    CODE_USED_MESSAGE: CODE_USED_MESSAGE,
     DEFAULT_OUTPUT_FOLDER_ID: DEFAULT_OUTPUT_FOLDER_ID,
     OUTPUT_FOLDER_UNAVAILABLE_MESSAGE: OUTPUT_FOLDER_UNAVAILABLE_MESSAGE,
     APPLICANT_NAME_MISSING_MESSAGE: APPLICANT_NAME_MISSING_MESSAGE,
     IssuanceError: IssuanceError,
     createPrivilegeCode: createPrivilegeCode,
+    computePrivilegeExpiryDate: computePrivilegeExpiryDate,
+    formatExpiresAtJst: formatExpiresAtJst,
+    isPrivilegeCodeExpired: isPrivilegeCodeExpired,
     createDownloadFileName: createDownloadFileName,
     createDriveFileName: createDriveFileName,
     resolveOutputFolderId: resolveOutputFolderId,
@@ -2206,6 +2393,7 @@ var JSQuizGasIssuanceV06Internal = (function (root, factory) {
     sanitizeBridgeSession: sanitizeBridgeSession,
     readBridgeSessionFromQueryString: readBridgeSessionFromQueryString,
     issueWorkFromBridge: issueWorkFromBridge,
+    verifyAccessFromBridge: verifyAccessFromBridge,
     doGet: doGet,
     doPost: doPost,
     isPublicLearnerDeployment: isPublicLearnerDeployment,
@@ -2233,6 +2421,10 @@ function doPost() {
 
 function issueWorkFromBridge() {
   return JSQuizGasIssuanceV06Internal.issueWorkFromBridge.apply(JSQuizGasIssuanceV06Internal, arguments);
+}
+
+function verifyAccessFromBridge() {
+  return JSQuizGasIssuanceV06Internal.verifyAccessFromBridge.apply(JSQuizGasIssuanceV06Internal, arguments);
 }
 
 function adminGenerateCode() {

@@ -7,7 +7,7 @@
 | 画面 | URL | 公開範囲 | できること |
 | --- | --- | --- | --- |
 | OWL JS Studio | GitHub Pages | 公開 | STEP学習・完成クイズの発行申請 |
-| 学習者向け GAS bridge | 既存の `/exec` | Anyone | ping と `issueWorkFromBridge` のみ |
+| 学習者向け GAS bridge | 既存の `/exec` | Anyone | ping、`verifyAccessFromBridge`、`issueWorkFromBridge` |
 | 面接官向け発行コード管理 | **このプロジェクトの** `/exec` | 面接官のみが知るURL。`Anyone` でも管理者パスワード必須 | 氏名・メールから発行コードを1件作る |
 
 公開 learner プロジェクトにこの HTML を足さないでください。`google.script.run` は同じプロジェクトのトップレベル関数を呼べるため、管理者用関数を公開 bridge に置かないことが分離の要点です。

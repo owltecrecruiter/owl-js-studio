@@ -96,7 +96,7 @@
 <body>
   <header>
     <div class="wrap">
-      <p class="brand">株式会社アウルテクノロジー　／　OWL JS Studio v0.9.20</p>
+      <p class="brand">株式会社アウルテクノロジー　／　OWL JS Studio v0.9.21</p>
       <h1>技術マニュアル</h1>
       <p class="lede">構成、判定、発行、デプロイ、テスト。運用手順は運用マニュアルを先に読んでください。</p>
     </div>
@@ -123,10 +123,10 @@
     <table>
       <thead><tr><th>項目</th><th>値</th></tr></thead>
       <tbody>
-        <tr><td>バージョン</td><td>v0.9.20</td></tr>
+        <tr><td>バージョン</td><td>v0.9.21</td></tr>
         <tr><td>学習画面</td><td>https://owltecrecruiter.github.io/owl-js-studio/</td></tr>
         <tr><td>公開ブランチ</td><td>GitHub <code>main</code> の <code>docs/</code>（GitHub Pages）</td></tr>
-        <tr><td>学習者 GAS</td><td>公開 <code>/exec</code>。ping と <code>issueWorkFromBridge</code> のみ</td></tr>
+        <tr><td>学習者 GAS</td><td>公開 <code>/exec</code>。ping、<code>verifyAccessFromBridge</code>、<code>issueWorkFromBridge</code></td></tr>
         <tr><td>面接官 GAS</td><td>別プロジェクト。Pages には載せない</td></tr>
       </tbody>
     </table>
@@ -164,8 +164,8 @@
     <table>
       <thead><tr><th>ファイル</th><th>内容</th></tr></thead>
       <tbody>
-        <tr><td><code>docs/index.html</code></td><td>エディタ、ガイド、プレビュー、特典コードダイアログ</td></tr>
-        <tr><td><code>docs/script.js</code></td><td>編集、実行、プレビュー履歴、CLEAR、発行 UI</td></tr>
+        <tr><td><code>docs/index.html</code></td><td>認証ゲート、エディタ、ガイド、プレビュー、作品受取ダイアログ</td></tr>
+        <tr><td><code>docs/script.js</code></td><td>学習開始認証、編集、実行、プレビュー履歴、CLEAR、発行 UI</td></tr>
         <tr><td><code>docs/studio-core.js</code></td><td>パーサ、STEP 判定、スタンドアロン HTML 生成。eval / new Function なし</td></tr>
         <tr><td><code>docs/style.css</code></td><td>Studio とプレビュー枠</td></tr>
         <tr><td><code>docs/issuance-v06-client.js</code></td><td>GAS iframe bridge クライアント</td></tr>
@@ -206,9 +206,11 @@
 
     <h2 id="issue">7. 発行フロー</h2>
     <ol>
-      <li>面接官 GAS が氏名・メールを登録し、8文字コードを生成。スプレッドシートには hash のみ。</li>
-      <li>学習者が CLEAR からコードを送る。Pages は検証済み <code>quizData</code> だけを bridge に渡す。</li>
-      <li>学習者 GAS がワンタイム消費、Drive 保存、メール添付を行う。</li>
+      <li>面接官 GAS が氏名・メールを登録し、8文字コードを生成。スプレッドシートには hash と <code>issuedAt</code> のみ。有効期限は発行から1暦月（日本時間、月末は翌月末日）。</li>
+      <li>学習開始時に Pages がコードを GAS <code>verifyAccess</code> へ送る。成功しても status は <code>valid</code> のまま。</li>
+      <li>コード平文は sessionStorage にだけ保持し、URL には載せない。再読み込み時は GAS で再認証する。</li>
+      <li>CLEAR ではコードを再入力しない。発行時に GAS が期限と使用済みを再確認する。</li>
+      <li>作品発行が成功した時点でコードを <code>used</code> にする。学習開始だけでは消費しない。</li>
       <li>Drive 名：<code>応募者氏名_作品タイトル.html</code></li>
       <li>メール添付名：<code>作品タイトル.html</code>（氏名は付けない）</li>
       <li>件名：<code>【OWL JS Studio】完成したクイズをお届けします</code></li>
@@ -234,7 +236,7 @@
       <li>手順の詳細は <code>gas/admin/README.md</code></li>
     </ul>
     <div class="note">
-      学習画面の STEP / CLEAR だけを変える改修では、学習者 GAS の再デプロイは不要です。発行 HTML の見た目・検証・Drive 名・メール文面を変えるときだけ両方の GAS を更新します。
+      v0.9.21 は認証 API と期限判定を GAS に追加しているため、学習者 GAS と面接官 GAS の両方を再デプロイしてください。STEP / CLEAR だけを変える改修では学習者 GAS の再デプロイは不要です。
     </div>
 
     <h2 id="deploy">9. デプロイ</h2>
@@ -255,10 +257,10 @@
 
     <h2 id="test">10. テスト</h2>
     <p>ローカル（Node）の例：</p>
-    <pre><code>node platform/studio-v0920-tests.js
+    <pre><code>node platform/studio-v0921-tests.js
 node gas/IssuanceBackend.local-tests.js
 node gas/admin/AdminIssuance.local-tests.js</code></pre>
-    <p>フロントの版ごとのテストは <code>platform/studio-v09*.js</code> です。gitignore のため GitHub には上がりません。判定や CLEAR を変えたら、対応する版のテストと <code>studio-v0920-tests.js</code> 相当を更新します。</p>
+    <p>フロントの版ごとのテストは <code>platform/studio-v09*.js</code> です。gitignore のため GitHub には上がりません。判定や CLEAR を変えたら、対応する版のテストと <code>studio-v0921-tests.js</code> 相当を更新します。</p>
     <p>ローカルテストは Drive / Mail / LockService をモックします。本番の権限・クォータ・iframe origin はデプロイ後のブラウザでしか確認できません。</p>
 
     <h2 id="change">11. 改修時の約束</h2>
@@ -266,14 +268,14 @@ node gas/admin/AdminIssuance.local-tests.js</code></pre>
       <li>vanilla HTML/CSS/JS。学習コードに <code>eval</code> / <code>new Function</code> を使わない。</li>
       <li>3問3択ロックを外さない。</li>
       <li>シークレットを <code>docs/</code> に書かない。</li>
-      <li>特典コードのワンタイム性、Drive 保存、メール送信の契約を黙って変えない。</li>
+      <li>特典コードのワンタイム性、1か月期限、Drive 保存、メール送信の契約を黙って変えない。</li>
       <li>STEP 1〜3 を変える必要がない改修では触らない。</li>
       <li>公開後の学習完了保持と「未実行コードを発行しない」を壊さない。</li>
     </ul>
     <p>運用者向けの当日手順は <a href="operations-manual.html">運用マニュアル</a>。GAS のプロパティ一覧・bridge の origin 規則・スプレッドシート列は <code>gas/README.md</code> が正本です。</p>
   </main>
   <footer>
-    <div class="wrap">株式会社アウルテクノロジー　OWL JS Studio v0.9.20　技術マニュアル　シークレットは記載していません</div>
+    <div class="wrap">株式会社アウルテクノロジー　OWL JS Studio v0.9.21　技術マニュアル　シークレットは記載していません</div>
   </footer>
 </body>
 </html>

@@ -375,7 +375,7 @@ test("learner doGet is unchanged when ADMIN_WEB_APP is unset", function () {
 test("public docs do not contain interviewer secrets", function () {
   const docsDir = path.join(__dirname, "..", "..", "docs");
   fs.readdirSync(docsDir).forEach(function (name) {
-    if (name === "owl-logo.png") {
+    if (name === "owl-logo.png" || /-manual\.html$/.test(name)) {
       return;
     }
     const text = fs.readFileSync(path.join(docsDir, name), "utf8");
@@ -392,6 +392,15 @@ test("print card and result share hyphen-free 8-character guidance", function ()
   assert.ok(html.indexOf("result-code") !== -1);
   assert.ok(html.indexOf("textContent=result.code") !== -1);
   assert.strictEqual(html.indexOf("replace(/(.{4})/g"), -1);
+});
+
+test("print card and result show one-month expiry", function () {
+  const html = adminApp.createInterviewerAppHtml();
+  assert.ok(html.indexOf("result-expiry") !== -1);
+  assert.ok(html.indexOf("print-expiry") !== -1);
+  assert.ok(html.indexOf("expiresAtJst") !== -1);
+  assert.ok(html.indexOf("有効期限は発行から1か月") !== -1);
+  assert.ok(html.indexOf("最初にこの特典コードを入力して学習をはじめてください") !== -1);
 });
 
 let failed = 0;

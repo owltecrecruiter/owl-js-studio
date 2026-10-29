@@ -14,6 +14,9 @@
   var RESULT_TYPE = "jsquiz:v0.6:result";
   var ERROR_TYPE = "jsquiz:v0.6:error";
   var READY_TYPE = "jsquiz:v0.7:ready";
+  var AUTH_TYPE = "jsquiz:v0.8:auth";
+  var AUTH_RESULT_TYPE = "jsquiz:v0.8:auth-result";
+  var AUTH_ERROR_TYPE = "jsquiz:v0.8:auth-error";
 
   function createGasBridgeClient(options) {
     var config = options || {};
@@ -29,6 +32,23 @@
     return {
       isConfigured: function () {
         return bridgeUrl !== "" && postTargetOrigin !== "" && allowedReplyOrigins.length > 0;
+      },
+      verifyAccessCode: function (input) {
+        var request = input || {};
+        if (!bridgeUrl) {
+          return Promise.reject(new Error("GAS bridge URL is not configured."));
+        }
+        var requestId = request.requestId || createBrowserRequestId();
+        return postToBridge({
+          type: AUTH_TYPE,
+          resultType: AUTH_RESULT_TYPE,
+          errorType: AUTH_ERROR_TYPE,
+          requestId: requestId,
+          payload: {
+            code: request.code,
+            requestId: requestId
+          }
+        });
       },
       issueCurrentQuiz: function (input) {
         var request = input || {};
@@ -52,11 +72,22 @@
           quizData: quizData
         };
 
-        return postToBridge(payload, requestId);
+        return postToBridge({
+          type: ISSUE_TYPE,
+          resultType: RESULT_TYPE,
+          errorType: ERROR_TYPE,
+          requestId: requestId,
+          payload: payload
+        });
       }
     };
 
-    function postToBridge(payload, requestId) {
+    function postToBridge(options) {
+      var requestId = options.requestId;
+      var payload = options.payload;
+      var messageType = options.type;
+      var resultType = options.resultType;
+      var errorType = options.errorType;
       return new Promise(function (resolve, reject) {
         if (inFlight[requestId]) {
           reject(new Error("This issuance request is already in progress."));
@@ -68,7 +99,7 @@
         var iframe = createBridgeFrame(bridgeSession);
         var trustedBridgeWindow = null;
         var trustedBridgeOrigin = "";
-        var issueSent = false;
+        var payloadSent = false;
 
         var timeout = root.setTimeout(function () {
           cleanup();
@@ -77,7 +108,7 @@
 
         function onMessage(event) {
           var data = event.data || {};
-          if (data.type !== READY_TYPE && data.type !== RESULT_TYPE && data.type !== ERROR_TYPE) {
+          if (data.type !== READY_TYPE && data.type !== resultType && data.type !== errorType) {
             return;
           }
           if (!isAllowedReplyOrigin(event.origin)) {
@@ -93,7 +124,7 @@
             trustedBridgeWindow = event.source;
             trustedBridgeOrigin = event.origin;
             addOrigin(allowedReplyOrigins, trustedBridgeOrigin);
-            sendIssue();
+            sendPayload();
             return;
           }
           if (event.source !== trustedBridgeWindow || event.origin !== trustedBridgeOrigin) {
@@ -102,10 +133,10 @@
           if (data.requestId !== requestId) {
             return;
           }
-          if (data.type === RESULT_TYPE) {
+          if (data.type === resultType) {
             cleanup();
             resolve(data.result);
-          } else if (data.type === ERROR_TYPE) {
+          } else if (data.type === errorType) {
             cleanup();
             reject(new Error(data.message || "GAS bridge returned an error."));
           }
@@ -122,13 +153,13 @@
 
         root.addEventListener("message", onMessage);
 
-        function sendIssue() {
-          if (issueSent || !trustedBridgeWindow || !trustedBridgeOrigin) {
+        function sendPayload() {
+          if (payloadSent || !trustedBridgeWindow || !trustedBridgeOrigin) {
             return;
           }
-          issueSent = true;
+          payloadSent = true;
           trustedBridgeWindow.postMessage({
-            type: ISSUE_TYPE,
+            type: messageType,
             requestId: requestId,
             bridgeSession: bridgeSession,
             payload: payload

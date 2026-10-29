@@ -32,8 +32,8 @@ Concrete data route:
 3. `platform/issuance-v06-client.js` creates a fresh random `bridgeSession`, appends it to the GAS iframe URL, and creates a hidden 1px `iframe` under `document.body` by default. A specific container can be passed as `frameContainer` if the operator wants a visible status area. The iframe should not be reused for admin work.
 4. GAS `doGet(e)` reads the `bridgeSession`, injects it into the HTML Service bridge, and the bridge posts `jsquiz:v0.7:ready` with that same session.
 5. GitHub Pages accepts `ready` only when the reply origin is allowed/expected and `bridgeSession` matches. It then stores `event.source` as the trusted bridge frame, even when it differs from the outer `iframe.contentWindow`.
-6. GitHub Pages sends `{ type: "jsquiz:v0.6:issue", requestId, bridgeSession, payload }` to the trusted ready source using the exact ready origin as `targetOrigin`.
-7. The GAS HTML Service page receives the message, verifies `event.origin === LEARNER_PAGE_ORIGIN` and `data.bridgeSession === bridgeSession`, then calls `google.script.run.issueWorkFromBridge(payload)`.
+6. GitHub Pages sends `{ type: "jsquiz:v0.8:auth", requestId, bridgeSession, payload }` to start learning, or `{ type: "jsquiz:v0.6:issue", requestId, bridgeSession, payload }` to issue completed work, to the trusted ready source using the exact ready origin as `targetOrigin`.
+7. The GAS HTML Service page receives the message, verifies `event.origin === LEARNER_PAGE_ORIGIN` and `data.bridgeSession === bridgeSession`, then calls `google.script.run.verifyAccessFromBridge(payload)` or `google.script.run.issueWorkFromBridge(payload)`.
 8. GAS validates code, requestId, email, and quiz data server-side, writes state to the spreadsheet, saves the generated HTML to Drive where possible, and emails the HTML as a `.html` attachment to the registered address.
 9. GAS replies to `event.source.postMessage(...)` using the exact allowed origin, never `"*"`, and includes the same `bridgeSession`.
 10. GitHub Pages accepts result/error replies only from the trusted ready source, exact trusted ready origin, matching requestId, and matching `bridgeSession`.
@@ -140,7 +140,8 @@ Apps Script HTML Service can invoke top-level server functions with `google.scri
 
 - `doGet()`: HTML Service entry point. Serves the learner bridge unless Script Property `ADMIN_WEB_APP=true`, in which case it serves the interviewer app from `admin/AdminIssuanceApp.js`. Do not set that property on the public learner deployment.
 - `doPost()`: disabled; returns `INVALID_REQUEST` for all JSON/API attempts.
-- `issueWorkFromBridge(payload)`: learner-only issue path. It validates requestId, code, email, and quiz data server-side, enforces one-time code use under lock, applies failed-attempt limiting, and logs rejected attempts without plaintext codes.
+- `verifyAccessFromBridge(payload)`: learner-only access check. It validates the privilege code, expiry, and unused status server-side, but does not mark the code used.
+- `issueWorkFromBridge(payload)`: learner-only issue path. It validates requestId, code, email, expiry, and quiz data server-side, enforces one-time code use under lock after a successful issue, applies failed-attempt limiting, and logs rejected attempts without plaintext codes.
 - `setupSpreadsheetSchema(input)`: admin/setup helper. Requires explicit `input.adminToken` and is hard-rejected when `PUBLIC_LEARNER_DEPLOYMENT=true`.
 - `adminGenerateCode(input)`, `adminDisableCode(input)`, `adminStatusLookup(input)`, `adminResend(input)`: admin helpers. Each requires explicit `input.adminToken`; none reads a token from the browser. All are hard-rejected when `PUBLIC_LEARNER_DEPLOYMENT=true`.
 - `testGenerateCode()`: editor-only helper. It is hard-rejected when `PUBLIC_LEARNER_DEPLOYMENT=true` and otherwise runs only when `ENABLE_GAS_EDITOR_TEST_HELPERS=true`. Leave that property unset or `false` before publishing the learner Web App.
@@ -245,7 +246,7 @@ Delivery constraints:
 - Quiz data is revalidated server-side with strict shape and length checks.
 - Admin operations require an explicit `adminToken` parameter and are disabled entirely when `PUBLIC_LEARNER_DEPLOYMENT=true`.
 - General learner browsers do not receive `ADMIN_API_TOKEN`; `platform/issuance-v06-client.js` sends only code, requestId, optional email, and validated quiz data.
-- The only public learner Web App route is the HTML Service bridge served by `doGet()`, which calls `issueWorkFromBridge()` with `google.script.run`. `doPost()` rejects all direct JSON requests, including `verifyCode`, `issueWork`, and admin-like actions.
+- The only public learner Web App route is the HTML Service bridge served by `doGet()`, which calls `verifyAccessFromBridge()` or `issueWorkFromBridge()` with `google.script.run`. `doPost()` rejects all direct JSON requests, including `verifyCode`, `issueWork`, and admin-like actions.
 - Admin routes remain server/editor functions: `setupSpreadsheetSchema`, `adminGenerateCode`, `adminDisableCode`, `adminStatusLookup`, and `adminResend`. GitHub Pages and general learner browsers must never receive `ADMIN_API_TOKEN`.
 - Rotate `ADMIN_API_TOKEN` by setting a new long random script property, updating any private admin tooling, verifying the new token, then invalidating the old token. Do not commit it to GitHub Pages.
 - Stronger admin option: put admin functions in a separate Apps Script project or a deployment limited to Google accounts/admins, and leave the learner Web App token-free. If learner access requires "Anyone" Web App access, do not expose admin HTML or admin callable wrappers from that deployment.

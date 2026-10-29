@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="owl-logo.png">
 </head>
-<body class="guide-open">
+<body class="guide-open access-locked">
   <header class="title-bar">
     <a class="brand-link" href="https://owl-tec.co.jp/" target="_blank" rel="noopener noreferrer">
       <span class="title-logo-frame">
@@ -200,7 +200,7 @@
     <span id="status-cursor">Ln 1, Col 1</span>
     <span>JavaScript</span>
     <span>UTF-8</span>
-    <span>v0.9.20</span>
+    <span>v0.9.21</span>
   </footer>
 
   <div id="reset-dialog" class="modal-overlay hidden" hidden>
@@ -217,15 +217,27 @@
     </div>
   </div>
 
+  <div id="access-gate" class="access-gate" role="dialog" aria-modal="true" aria-labelledby="access-gate-title" aria-describedby="access-gate-copy">
+    <div class="access-gate-card">
+      <h2 id="access-gate-title">学習をはじめる</h2>
+      <p id="access-gate-copy">受け取った特典コードを入力してください。<br>コードは半角英数字8文字・ハイフン不要です。</p>
+      <label class="issuance-label" for="access-code-input">特典コード</label>
+      <input id="access-code-input" class="issuance-code-input" type="text" autocomplete="off" spellcheck="false" maxlength="120" autocapitalize="characters" placeholder="特典コードを入力">
+      <p class="issuance-hint">半角英数字8文字・ハイフン不要</p>
+      <p id="access-gate-status" class="issuance-status" aria-live="polite"></p>
+      <div class="modal-actions">
+        <button id="access-start-button" class="main-button" type="button">学習をはじめる</button>
+      </div>
+    </div>
+  </div>
+
   <div id="issuance-dialog" class="modal-overlay hidden" hidden>
     <div class="modal-card issuance-card" role="dialog" aria-modal="true" aria-labelledby="issuance-dialog-title" aria-describedby="issuance-dialog-copy issuance-dialog-note">
       <h2 id="issuance-dialog-title">完成したクイズを受け取る</h2>
       <div id="issuance-form-view">
-        <p id="issuance-dialog-copy">受け取った特典コードを入力してください。<br>今の作ったクイズゲームを受け取れます。</p>
-        <p id="issuance-dialog-note" class="issuance-copy-note">※注意※特典コードは1回だけ使えます。</p>
-        <label class="issuance-label" for="issuance-code-input">特典コード</label>
-        <input id="issuance-code-input" class="issuance-code-input" type="text" autocomplete="off" spellcheck="false" maxlength="120" autocapitalize="characters" placeholder="特典コードを入力">
-        <p class="issuance-hint">半角英数字8文字・ハイフン不要</p>
+        <p id="issuance-dialog-copy">学習開始時に確認した特典コードで、今の作ったクイズゲームを受け取れます。</p>
+        <p id="issuance-auth-status" class="issuance-auth-status">特典コードは認証済みです。</p>
+        <p id="issuance-dialog-note" class="issuance-copy-note">※注意※特典コードは作品の受け取りに1回だけ使えます。</p>
         <p id="issuance-form-status" class="issuance-status" aria-live="polite"></p>
         <div class="modal-actions">
           <button id="issuance-cancel-button" class="sub-button" type="button">学習画面に戻る</button>
