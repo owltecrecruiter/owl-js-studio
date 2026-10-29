@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OWL JS Studio 技術マニュアル</title>
+  <link rel="icon" href="owl-logo.png">
+  <style>
+    :root {
+      --text: #111827;
+      --muted: #4b5563;
+      --line: #d1d5db;
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --accent: #111827;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+      font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+      line-height: 1.7;
+    }
+    header {
+      padding: 28px 20px 20px;
+      color: #fff;
+      background: var(--accent);
+    }
+    header .wrap, main, footer .wrap { max-width: 880px; margin: 0 auto; }
+    .brand { margin: 0 0 8px; font-size: 13px; opacity: 0.8; }
+    h1 { margin: 0 0 8px; font-size: 28px; line-height: 1.3; }
+    .lede { margin: 0; color: #e5e7eb; }
+    main { padding: 28px 20px 64px; }
+    h2 {
+      margin: 36px 0 12px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid var(--accent);
+      font-size: 20px;
+    }
+    h3 { margin: 22px 0 8px; font-size: 16px; }
+    table { width: 100%; border-collapse: collapse; background: var(--card); }
+    th, td {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #e5e7eb; }
+    pre, code {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+    }
+    pre {
+      padding: 14px 16px;
+      overflow: auto;
+      background: #111827;
+      color: #e5e7eb;
+      border-radius: 8px;
+    }
+    code { padding: 1px 5px; background: #e5e7eb; border-radius: 4px; }
+    pre code { padding: 0; background: transparent; color: inherit; }
+    nav.toc {
+      padding: 16px 18px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+    nav.toc ol { margin: 8px 0 0; padding-left: 22px; }
+    .warn {
+      padding: 12px 14px;
+      color: #9a3412;
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+      border-radius: 8px;
+    }
+    .note {
+      padding: 12px 14px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+    }
+    a { color: #1d4ed8; }
+    footer {
+      padding: 16px 20px 28px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    @media print {
+      body { background: #fff; }
+      header { color: #000; background: #fff; border-bottom: 2px solid #000; }
+      pre { color: #000; background: #f3f4f6; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <p class="brand">株式会社アウルテクノロジー　／　OWL JS Studio v0.9.20</p>
+      <h1>技術マニュアル</h1>
+      <p class="lede">構成、判定、発行、デプロイ、テスト。運用手順は運用マニュアルを先に読んでください。</p>
+    </div>
+  </header>
+  <main>
+    <nav class="toc" aria-label="目次">
+      <strong>目次</strong>
+      <ol>
+        <li><a href="#status">完成時点の状態</a></li>
+        <li><a href="#arch">システム構成</a></li>
+        <li><a href="#repo">リポジトリと公開範囲</a></li>
+        <li><a href="#front">学習フロント</a></li>
+        <li><a href="#steps">STEP 判定と CLEAR 保持</a></li>
+        <li><a href="#parser">パーサ制約</a></li>
+        <li><a href="#issue">発行フロー</a></li>
+        <li><a href="#gas">GAS 2プロジェクト</a></li>
+        <li><a href="#deploy">デプロイ</a></li>
+        <li><a href="#test">テスト</a></li>
+        <li><a href="#change">改修時の約束</a></li>
+      </ol>
+    </nav>
+
+    <h2 id="status">1. 完成時点の状態</h2>
+    <table>
+      <thead><tr><th>項目</th><th>値</th></tr></thead>
+      <tbody>
+        <tr><td>バージョン</td><td>v0.9.20</td></tr>
+        <tr><td>学習画面</td><td>https://owltecrecruiter.github.io/owl-js-studio/</td></tr>
+        <tr><td>公開ブランチ</td><td>GitHub <code>main</code> の <code>docs/</code>（GitHub Pages）</td></tr>
+        <tr><td>学習者 GAS</td><td>公開 <code>/exec</code>。ping と <code>issueWorkFromBridge</code> のみ</td></tr>
+        <tr><td>面接官 GAS</td><td>別プロジェクト。Pages には載せない</td></tr>
+      </tbody>
+    </table>
+    <p>学習画面の GAS URL は <code>docs/studio-config.js</code> の <code>gasBridgeUrl</code> だけです。管理者トークン・ペッパー・スプレッドシート ID・Drive ID は Pages に置かないでください。</p>
+
+    <h2 id="arch">2. システム構成</h2>
+    <pre><code>[学習者]
+  GitHub Pages  docs/   OWL JS Studio
+       |  hidden iframe + postMessage
+       v
+[学習者用 GAS Web App /exec]  Anyone
+       |-- Spreadsheet（codeHash, 発行履歴）
+       |-- Drive（応募者氏名_作品タイトル.html）
+       +-- MailApp（作品タイトル.html を添付）
+
+[面接官]
+  面接官用 GAS Web App /exec   別プロジェクト
+       +-- 同じ Spreadsheet / 同じ CODE_HASH_PEPPER
+</code></pre>
+    <p>ブラウザから GAS へ直接 <code>fetch</code> しません。CORS を避けるため、HTML Service の iframe が <code>google.script.run</code> でサーバー関数を呼びます。詳細な origin / <code>bridgeSession</code> の規則は <code>gas/README.md</code> にあります。</p>
+
+    <h2 id="repo">3. リポジトリと公開範囲</h2>
+    <table>
+      <thead><tr><th>場所</th><th>役割</th><th>GitHub Pages</th></tr></thead>
+      <tbody>
+        <tr><td><code>docs/</code></td><td>学習 UI、studio-core、bridge クライアント、本マニュアル</td><td>公開</td></tr>
+        <tr><td><code>gas/</code></td><td>IssuanceBackend、学習者 bridge、埋め込みロゴ</td><td>出ない</td></tr>
+        <tr><td><code>gas/admin/</code></td><td>面接官 Web アプリ</td><td>出ない</td></tr>
+        <tr><td><code>platform/</code></td><td>ローカルテスト（gitignore）</td><td>出ない</td></tr>
+      </tbody>
+    </table>
+    <p><code>docs/</code> と <code>platform/</code> の <code>index.html</code> <code>script.js</code> <code>style.css</code> <code>studio-core.js</code> は同一内容に保ちます。テストが drift を検出します。</p>
+
+    <h2 id="front">4. 学習フロント</h2>
+    <table>
+      <thead><tr><th>ファイル</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td><code>docs/index.html</code></td><td>エディタ、ガイド、プレビュー、特典コードダイアログ</td></tr>
+        <tr><td><code>docs/script.js</code></td><td>編集、実行、プレビュー履歴、CLEAR、発行 UI</td></tr>
+        <tr><td><code>docs/studio-core.js</code></td><td>パーサ、STEP 判定、スタンドアロン HTML 生成。eval / new Function なし</td></tr>
+        <tr><td><code>docs/style.css</code></td><td>Studio とプレビュー枠</td></tr>
+        <tr><td><code>docs/issuance-v06-client.js</code></td><td>GAS iframe bridge クライアント</td></tr>
+        <tr><td><code>docs/studio-config.js</code></td><td>公開 <code>/exec</code> URL のみ</td></tr>
+      </tbody>
+    </table>
+    <p>学習者が送るのは JavaScript ソースではなく、パース済みの <code>quizData</code>（<code>gameTitle</code>、<code>backgroundColor</code>、<code>textColor</code>、3問）です。サーバーでも同じ形を再検証します。</p>
+
+    <h2 id="steps">5. STEP 判定と CLEAR 保持</h2>
+    <p>判定の本体は <code>evaluateStepProgress</code> / <code>areAllStepsComplete</code> です。学習完了の保持は別関数です。</p>
+    <table>
+      <thead><tr><th>STEP</th><th>判定</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>ふりがな ON（実行不要）</td></tr>
+        <tr><td>2</td><td><code>gameTitle</code> が初期値から変化し、現在コードの実行成功</td></tr>
+        <tr><td>3</td><td>色が初期値から変化し、実行成功</td></tr>
+        <tr><td>4</td><td>問題文3つと選択肢9つがすべて初期値から変化し、実行成功</td></tr>
+        <tr><td>5</td><td>いずれか1問の <code>correctIndex</code> が初期値から変化し、実行成功し、その問で新しい正解を選んで「正解！」</td></tr>
+      </tbody>
+    </table>
+    <ul>
+      <li>STEP 5 は3問すべての正解番号変更を要求しない（<code>hasChangedCorrectIndex</code>）。</li>
+      <li>一度 1〜5 が揃うと <code>learningComplete</code> はセッション中保持する（<code>rememberLearningComplete</code>）。</li>
+      <li>その後のタイトル・色・問題の再編集では完了フラグを消さない。</li>
+      <li>構文／検証エラー中は CLEAR を無効化する。修正後は STEP やり直し不要。</li>
+      <li>発行は <code>editorMatchesLastRun</code> かつ <code>lastRunWork</code> があるときだけ。未実行の最新コードや古い実行結果は出さない。</li>
+      <li><code>getLastValidQuizData()</code> は last-run とエディタが一致するときだけデータを返す。bridge クライアントはこの関数を使う。</li>
+    </ul>
+    <p>CLEAR の見た目と発行可否は <code>evaluateCourseClearGate</code> が分けて返します。<code>clearEnabled</code> と <code>canOpenIssuance</code> は別です。</p>
+
+    <h2 id="parser">6. パーサ制約</h2>
+    <ul>
+      <li>許可された <code>const</code> と、各問の <code>if (selectedIndexN === 0|1|2)</code> だけ。</li>
+      <li>3問・各3択固定。<code>question4</code> や余分な文はエラー。</li>
+      <li>色は <code>rgb(整数, 整数, 整数)</code>。発行 HTML では HEX または名前つき許可色。</li>
+      <li>学習 JS を実行しない。プレビューはパース結果の work データで動く。</li>
+    </ul>
+
+    <h2 id="issue">7. 発行フロー</h2>
+    <ol>
+      <li>面接官 GAS が氏名・メールを登録し、8文字コードを生成。スプレッドシートには hash のみ。</li>
+      <li>学習者が CLEAR からコードを送る。Pages は検証済み <code>quizData</code> だけを bridge に渡す。</li>
+      <li>学習者 GAS がワンタイム消費、Drive 保存、メール添付を行う。</li>
+      <li>Drive 名：<code>応募者氏名_作品タイトル.html</code></li>
+      <li>メール添付名：<code>作品タイトル.html</code>（氏名は付けない）</li>
+      <li>件名：<code>【OWL JS Studio】完成したクイズをお届けします</code></li>
+    </ol>
+    <div class="warn">
+      コード平文は生成時だけ画面に出ます。再表示 API はありません。Drive 保存成功後にメールだけ失敗した場合は、コードは使用済みのままファイルが残るので、再発行ではなく管理者の再送を使います。
+    </div>
+
+    <h2 id="gas">8. GAS 2プロジェクト</h2>
+    <h3>学習者プロジェクト</h3>
+    <ul>
+      <li>コピー：<code>gas/IssuanceBackend.js</code>、<code>gas/embedded-brand-assets.js</code></li>
+      <li>必須プロパティ：<code>SPREADSHEET_ID</code>、<code>CODE_HASH_PEPPER</code>、<code>LEARNER_PAGE_ORIGIN</code>（<code>https://owltecrecruiter.github.io</code>）、<code>PUBLIC_LEARNER_DEPLOYMENT=true</code>、<code>OUTPUT_FOLDER_ID</code></li>
+      <li>アクセス：Anyone。<code>doPost</code> は無効。管理者関数は public モードで拒否。</li>
+      <li>エディタのファイル保存だけでは公開 Web アプリは更新されない。必ず再デプロイする。</li>
+    </ul>
+    <h3>面接官プロジェクト</h3>
+    <ul>
+      <li>コピー：上記に加え <code>gas/admin/AdminIssuanceApp.js</code>、<code>gas/admin/print-assets.js</code></li>
+      <li><code>ADMIN_WEB_APP=true</code>、<code>PUBLIC_LEARNER_DEPLOYMENT</code> は未設定または false</li>
+      <li>学習者側と<strong>同じ</strong> <code>SPREADSHEET_ID</code> と <code>CODE_HASH_PEPPER</code></li>
+      <li><code>INTERVIEWER_ADMIN_PASSWORD</code> と <code>ADMIN_API_TOKEN</code> は Pages に出さない</li>
+      <li>手順の詳細は <code>gas/admin/README.md</code></li>
+    </ul>
+    <div class="note">
+      学習画面の STEP / CLEAR だけを変える改修では、学習者 GAS の再デプロイは不要です。発行 HTML の見た目・検証・Drive 名・メール文面を変えるときだけ両方の GAS を更新します。
+    </div>
+
+    <h2 id="deploy">9. デプロイ</h2>
+    <h3>GitHub Pages</h3>
+    <ol>
+      <li><code>docs/</code> を更新する。</li>
+      <li><code>platform/</code> の同名4ファイルを揃える。</li>
+      <li>フッタと <code>studio-core.js</code> 先頭のバージョンを上げる。</li>
+      <li><code>main</code> に push する。Pages ソースは <code>docs/</code>。</li>
+    </ol>
+    <h3>学習者 GAS を触るとき</h3>
+    <ol>
+      <li>Apps Script エディタへソースを貼る。</li>
+      <li>新しいデプロイ、または既存デプロイの「デプロイを編集」でバージョンを上げる。</li>
+      <li><code>/exec</code> URL が変わったら <code>docs/studio-config.js</code> を更新して Pages も出す。</li>
+      <li>必要なら <code>docs/gas-bridge-connectivity-test.html</code> で ping だけ確認する。本番コードは送らない。</li>
+    </ol>
+
+    <h2 id="test">10. テスト</h2>
+    <p>ローカル（Node）の例：</p>
+    <pre><code>node platform/studio-v0920-tests.js
+node gas/IssuanceBackend.local-tests.js
+node gas/admin/AdminIssuance.local-tests.js</code></pre>
+    <p>フロントの版ごとのテストは <code>platform/studio-v09*.js</code> です。gitignore のため GitHub には上がりません。判定や CLEAR を変えたら、対応する版のテストと <code>studio-v0920-tests.js</code> 相当を更新します。</p>
+    <p>ローカルテストは Drive / Mail / LockService をモックします。本番の権限・クォータ・iframe origin はデプロイ後のブラウザでしか確認できません。</p>
+
+    <h2 id="change">11. 改修時の約束</h2>
+    <ul>
+      <li>vanilla HTML/CSS/JS。学習コードに <code>eval</code> / <code>new Function</code> を使わない。</li>
+      <li>3問3択ロックを外さない。</li>
+      <li>シークレットを <code>docs/</code> に書かない。</li>
+      <li>特典コードのワンタイム性、Drive 保存、メール送信の契約を黙って変えない。</li>
+      <li>STEP 1〜3 を変える必要がない改修では触らない。</li>
+      <li>公開後の学習完了保持と「未実行コードを発行しない」を壊さない。</li>
+    </ul>
+    <p>運用者向けの当日手順は <a href="operations-manual.html">運用マニュアル</a>。GAS のプロパティ一覧・bridge の origin 規則・スプレッドシート列は <code>gas/README.md</code> が正本です。</p>
+  </main>
+  <footer>
+    <div class="wrap">株式会社アウルテクノロジー　OWL JS Studio v0.9.20　技術マニュアル　シークレットは記載していません</div>
+  </footer>
+</body>
+</html>
